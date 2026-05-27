@@ -41,7 +41,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    restart: unless-stopped
+    restart: "no"
     volumes:
       - frontend_dist:/app/dist
 
