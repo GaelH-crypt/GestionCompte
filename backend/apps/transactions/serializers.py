@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import Transaction
+from apps.accounts.models import Account
 
 
 class TransactionSerializer(serializers.ModelSerializer):
@@ -12,6 +13,14 @@ class TransactionSerializer(serializers.ModelSerializer):
                   'category', 'category_name', 'description', 'date', 'is_recurring',
                   'note', 'tags', 'transfer_to_account', 'created_at', 'updated_at')
         read_only_fields = ('id', 'created_at', 'updated_at', 'category_name', 'account_name')
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            user_accounts = Account.objects.filter(user=request.user)
+            self.fields['account'].queryset = user_accounts
+            self.fields['transfer_to_account'].queryset = user_accounts
 
     def validate(self, data):
         if data.get('transaction_type') == 'transfer' and not data.get('transfer_to_account'):
