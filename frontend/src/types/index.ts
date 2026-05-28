@@ -184,3 +184,45 @@ export interface PaginatedResponse<T> {
   previous: string | null
   results: T[]
 }
+
+// ─── Import XLSX ───────────────────────────────────────────────────────────
+
+export interface ImportedAccount {
+  name: string
+  rib: string
+  balance: number
+}
+
+export interface ImportedTransaction {
+  date: string
+  description: string
+  amount: number
+  transaction_type: TransactionType
+  suggested_category: string | null
+  category_id: number | null
+}
+
+export interface AccountMapping {
+  rib: string
+  create: boolean
+  id?: number
+  name: string
+  account_type: AccountType
+}
+
+export interface PreviewResponse {
+  accounts: ImportedAccount[]
+  existing_accounts: { id: number; name: string; account_type: AccountType }[]
+  transactions: Record<string, ImportedTransaction[]>
+  duplicate_counts: Record<string, number>
+}
+
+export interface ConfirmPayload {
+  mapping: Record<string, AccountMapping>
+  transactions: Record<string, ImportedTransaction[]>
+}
+
+export interface ConfirmResponse {
+  created_accounts: number
+  created_transactions: number
+}
