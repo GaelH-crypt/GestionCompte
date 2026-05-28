@@ -3,6 +3,7 @@ import datetime
 import openpyxl
 from django.test import TestCase
 from apps.imports.services.parser import parse_excel
+from apps.imports.services.categorizer import suggest_category
 
 
 def _make_excel():
@@ -80,3 +81,23 @@ class ParserTest(TestCase):
         result = parse_excel(_make_excel().read())
         self.assertIn('accounts', result)
         self.assertEqual(len(result['accounts']), 2)
+
+
+class CategorizerTest(TestCase):
+    def test_supermarket(self):
+        self.assertEqual(suggest_category('PAIEMENT CARREFOUR MARKET CARTE'), 'Alimentation')
+
+    def test_rent(self):
+        self.assertEqual(suggest_category('PRLV SEPA OPH DE CALAIS CREANCES LOCATIVES'), 'Logement')
+
+    def test_energy(self):
+        self.assertEqual(suggest_category('PRELEVEMENT EDF PARTICULIERS'), 'Factures')
+
+    def test_transport(self):
+        self.assertEqual(suggest_category('PAIEMENT SNCF BILLETS'), 'Transport')
+
+    def test_salary(self):
+        self.assertEqual(suggest_category('VIREMENT SALAIRE MARS'), 'Revenus')
+
+    def test_no_match(self):
+        self.assertIsNone(suggest_category('OPERATION DIVERSE'))
