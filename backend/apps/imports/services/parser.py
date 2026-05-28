@@ -2,6 +2,10 @@ import io
 import pandas as pd
 
 
+class ParseError(Exception):
+    pass
+
+
 def _rib_from_sheet_name(sheet_name: str) -> str:
     """Extrait le numéro de compte depuis le nom de feuille 'Cpt 02625 00022060507'."""
     parts = sheet_name.split(' ', 1)
@@ -11,7 +15,10 @@ def _rib_from_sheet_name(sheet_name: str) -> str:
 
 
 def _parse_accounts_sheet(xl: pd.ExcelFile) -> list[dict]:
-    df = xl.parse('Vos comptes', header=1)
+    try:
+        df = xl.parse('Vos comptes', header=1, usecols=range(4))
+    except Exception as e:
+        raise ParseError("Sheet 'Vos comptes' not found. Is this a Crédit Mutuel export?") from e
     df.columns = ['name', 'rib', 'balance', 'currency']
     df = df.dropna(subset=['name'])
     df = df[df['name'].astype(str).str.strip() != '']
@@ -36,8 +43,15 @@ def _parse_account_sheet(xl: pd.ExcelFile, sheet_name: str) -> tuple[str, list[d
             if len(parts) >= 2:
                 rib = parts[-1].strip()
 
-    df = xl.parse(sheet_name, header=3, usecols=range(7))
-    df.columns = ['date', 'value_date', 'description', 'debit', 'credit', 'balance', 'currency']
+    df = xl.parse(sheet_name, header=3)
+    if df.shape[1] < 5:
+        return rib, []
+    df = df.iloc[:, :7]
+    col_names = ['date', 'value_date', 'description', 'debit', 'credit', 'balance', 'currency']
+    df.columns = col_names[:df.shape[1]]
+    for col in col_names:
+        if col not in df.columns:
+            df[col] = None
 
     # Filtrer les lignes sans date valide ou avec libellé de pied de page
     df = df[pd.to_datetime(df['date'], errors='coerce').notna()]
@@ -94,6 +108,9 @@ def parse_excel(file) -> dict:
     for sheet in xl.sheet_names:
         if sheet.startswith('Cpt '):
             rib, txs = _parse_account_sheet(xl, sheet)
-            transactions[rib] = txs
+            if rib in transactions:
+                transactions[rib].extend(txs)
+            else:
+                transactions[rib] = txs
 
     return {'accounts': accounts, 'transactions': transactions}

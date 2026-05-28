@@ -75,3 +75,8 @@ class ParserTest(TestCase):
         transaction_ribs = set(result['transactions'].keys())
         # All transaction RIBs must correspond to an account RIB
         self.assertTrue(transaction_ribs.issubset(account_ribs))
+
+    def test_parse_excel_accepts_bytes(self):
+        result = parse_excel(_make_excel().read())
+        self.assertIn('accounts', result)
+        self.assertEqual(len(result['accounts']), 2)
