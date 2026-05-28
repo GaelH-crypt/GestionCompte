@@ -83,6 +83,44 @@ class ParserTest(TestCase):
         self.assertEqual(len(result['accounts']), 2)
 
 
+from django.contrib.auth.models import User
+from apps.accounts.models import Account
+from apps.transactions.models import Transaction as TxModel
+from apps.imports.services.deduplicator import filter_duplicates
+
+
+class DeduplicatorTest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user('dup_user', password='pass')
+        self.account = Account.objects.create(
+            user=self.user, name='Test', account_type='checking',
+            initial_balance=0, color='#fff', icon='CreditCard'
+        )
+        TxModel.objects.create(
+            user=self.user, account=self.account,
+            transaction_type='expense', amount='42.50',
+            description='CARREFOUR MARKET', date='2026-05-01'
+        )
+
+    def test_existing_transaction_detected(self):
+        candidates = [
+            {'date': '2026-05-01', 'description': 'CARREFOUR MARKET', 'amount': 42.50, 'transaction_type': 'expense'},
+            {'date': '2026-05-02', 'description': 'SALAIRE MAI', 'amount': 2500.0, 'transaction_type': 'income'},
+        ]
+        new_txs, dup_count = filter_duplicates(candidates, self.account.id)
+        self.assertEqual(dup_count, 1)
+        self.assertEqual(len(new_txs), 1)
+        self.assertEqual(new_txs[0]['description'], 'SALAIRE MAI')
+
+    def test_no_duplicates(self):
+        candidates = [
+            {'date': '2026-06-01', 'description': 'LIDL', 'amount': 15.0, 'transaction_type': 'expense'},
+        ]
+        new_txs, dup_count = filter_duplicates(candidates, self.account.id)
+        self.assertEqual(dup_count, 0)
+        self.assertEqual(len(new_txs), 1)
+
+
 class CategorizerTest(TestCase):
     def test_supermarket(self):
         self.assertEqual(suggest_category('PAIEMENT CARREFOUR MARKET CARTE'), 'Alimentation')
