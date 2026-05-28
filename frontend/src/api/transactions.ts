@@ -1,0 +1,15 @@
+import client from './client'
+import type { Transaction, PaginatedResponse } from '@/types'
+
+export const transactionsApi = {
+  list: (params?: Record<string, string | number>) =>
+    client.get<PaginatedResponse<Transaction>>('/transactions/', { params }),
+  get: (id: number) =>
+    client.get<Transaction>(`/transactions/${id}/`),
+  create: (data: Partial<Transaction>) =>
+    client.post<Transaction>('/transactions/', data),
+  update: (id: number, data: Partial<Transaction>) =>
+    client.patch<Transaction>(`/transactions/${id}/`, data),
+  delete: (id: number) =>
+    client.delete(`/transactions/${id}/`),
+}
