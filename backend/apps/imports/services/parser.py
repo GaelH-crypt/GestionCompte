@@ -25,7 +25,17 @@ def _parse_accounts_sheet(xl: pd.ExcelFile) -> list[dict]:
 
 
 def _parse_account_sheet(xl: pd.ExcelFile, sheet_name: str) -> tuple[str, list[dict]]:
-    rib = _rib_from_sheet_name(sheet_name)
+    # Read raw to extract full RIB from row 0
+    raw = xl.parse(sheet_name, header=None)
+    rib = _rib_from_sheet_name(sheet_name)  # fallback
+    if not raw.empty:
+        cell = str(raw.iloc[0, 0])
+        if 'R.I.B.' in cell or 'R.I.B' in cell:
+            # Format: "R.I.B. : 10278 02625 00022060507"
+            parts = cell.split(':')
+            if len(parts) >= 2:
+                rib = parts[-1].strip()
+
     df = xl.parse(sheet_name, header=3, usecols=range(7))
     df.columns = ['date', 'value_date', 'description', 'debit', 'credit', 'balance', 'currency']
 

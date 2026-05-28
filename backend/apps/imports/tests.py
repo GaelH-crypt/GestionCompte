@@ -46,12 +46,12 @@ class ParserTest(TestCase):
 
     def test_transactions_extracted(self):
         result = parse_excel(self.file)
-        txs = result['transactions']['02625 00022060507']
+        txs = result['transactions']['10278 02625 00022060507']
         self.assertEqual(len(txs), 2)
 
     def test_debit_transaction(self):
         result = parse_excel(self.file)
-        txs = result['transactions']['02625 00022060507']
+        txs = result['transactions']['10278 02625 00022060507']
         debit = next(t for t in txs if t['transaction_type'] == 'expense')
         self.assertEqual(debit['description'], 'CARREFOUR MARKET')
         self.assertAlmostEqual(float(debit['amount']), 42.5)
@@ -59,12 +59,19 @@ class ParserTest(TestCase):
 
     def test_credit_transaction(self):
         result = parse_excel(self.file)
-        txs = result['transactions']['02625 00022060507']
+        txs = result['transactions']['10278 02625 00022060507']
         credit = next(t for t in txs if t['transaction_type'] == 'income')
         self.assertAlmostEqual(float(credit['amount']), 2500.0)
 
     def test_footer_rows_skipped(self):
         result = parse_excel(self.file)
-        txs = result['transactions']['02625 00022060507']
+        txs = result['transactions']['10278 02625 00022060507']
         # La ligne "Solde au ..." ne doit pas apparaître
         self.assertFalse(any('Solde au' in t['description'] for t in txs))
+
+    def test_rib_consistency(self):
+        result = parse_excel(self.file)
+        account_ribs = {a['rib'] for a in result['accounts']}
+        transaction_ribs = set(result['transactions'].keys())
+        # All transaction RIBs must correspond to an account RIB
+        self.assertTrue(transaction_ribs.issubset(account_ribs))
