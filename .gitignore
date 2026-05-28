@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*/__pycache__/
+**/__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+venv/
+.env
+*.log
+
+# Django
+backend/staticfiles/
+backend/media/
+backend/db.sqlite3
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+
+# Docker
+.docker/
+docker-compose.override.yml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Superpowers internal tooling
+docs/superpowers/
