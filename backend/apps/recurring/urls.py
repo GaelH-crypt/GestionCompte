@@ -1,3 +1,6 @@
-from django.urls import path
+from rest_framework.routers import SimpleRouter
+from .views import RecurringTransactionViewSet
 
-urlpatterns = []
+router = SimpleRouter()
+router.register('', RecurringTransactionViewSet, basename='recurring')
+urlpatterns = router.urls
