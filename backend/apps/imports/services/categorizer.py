@@ -4,7 +4,7 @@ RULES: list[tuple[list[str], str]] = [
     (['EDF', 'ENGIE', 'VEOLIA', 'SUEZ', 'SOSH', 'ORANGE', 'SFR', 'FREE', 'BOUYGUES', 'TELECOM', 'ELECTRICITE', 'GAZ'], 'Factures'),
     (['SNCF', 'RATP', 'UBER', 'TAXI', 'TOTAL', 'BP', 'SHELL', 'ESSENCE', 'AUTOROUTE', 'PARKING'], 'Transport'),
     (['PHARMACIE', 'MEDECIN', 'DOCTEUR', 'CLINIQUE', 'HOPITAL', 'SECU', 'CPAM', 'MUTUELLE'], 'Santé'),
-    (['RESTAURANT', 'BRASSERIE', 'CAFE ', 'MCDO', 'MCDONALD', 'BURGER', 'PIZZA', 'KEBAB'], 'Restauration'),
+    (['RESTAURANT', 'BRASSERIE', 'CAFE', 'MCDO', 'MCDONALD', 'BURGER', 'PIZZA', 'KEBAB'], 'Restauration'),
     (['SALAIRE', 'PAIE', 'REMUNERATION'], 'Revenus'),
     (['VIR SEPA', 'VIREMENT'], 'Virement'),
 ]
