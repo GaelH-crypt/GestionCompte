@@ -1,3 +1,6 @@
-from django.urls import path
+from rest_framework.routers import SimpleRouter
+from .views import CreditViewSet
 
-urlpatterns = []
+router = SimpleRouter()
+router.register('', CreditViewSet, basename='credits')
+urlpatterns = router.urls
