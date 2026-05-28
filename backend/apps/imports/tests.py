@@ -139,3 +139,71 @@ class CategorizerTest(TestCase):
 
     def test_no_match(self):
         self.assertIsNone(suggest_category('OPERATION DIVERSE'))
+
+
+def _make_minimal_excel() -> bytes:
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'Vos comptes'
+    ws.append([None])
+    ws.append(['Compte', 'R.I.B.', 'Solde', 'Dev'])
+    ws.append(['C/C TEST', '10278 00000 00000000001', 100.0, 'EUR'])
+
+    wc = wb.create_sheet('Cpt 00000 00000000001')
+    wc.append(['R.I.B. : 10278 00000 00000000001'] + [None] * 6)
+    wc.append([None] * 7)
+    wc.append(['Liste de vos comptes'] * 6 + [None])
+    wc.append(['Date', 'Valeur', 'Libellé', 'Débit', 'Crédit', 'Solde', 'Dev'])
+    wc.append([datetime.datetime(2026, 4, 1), datetime.datetime(2026, 4, 1), 'LIDL', -15.0, None, None, 'EUR'])
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+from rest_framework.test import APIClient
+from rest_framework import status
+
+
+class PreviewAPITest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user('prev_user', password='pass')
+        self.client.force_authenticate(user=self.user)
+
+    def test_preview_returns_accounts_and_transactions(self):
+        excel_bytes = _make_minimal_excel()
+        resp = self.client.post(
+            '/api/import/preview/',
+            {'file': io.BytesIO(excel_bytes)},
+            format='multipart'
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.json()
+        self.assertIn('accounts', data)
+        self.assertIn('transactions', data)
+        self.assertEqual(len(data['accounts']), 1)
+        self.assertEqual(data['accounts'][0]['name'], 'C/C TEST')
+
+    def test_preview_suggests_category(self):
+        excel_bytes = _make_minimal_excel()
+        resp = self.client.post(
+            '/api/import/preview/',
+            {'file': io.BytesIO(excel_bytes)},
+            format='multipart'
+        )
+        txs = resp.json()['transactions']['10278 00000 00000000001']
+        self.assertEqual(txs[0]['suggested_category'], 'Alimentation')
+
+    def test_preview_requires_auth(self):
+        client = APIClient()
+        resp = client.post('/api/import/preview/', {}, format='multipart')
+        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_preview_rejects_non_xlsx(self):
+        resp = self.client.post(
+            '/api/import/preview/',
+            {'file': io.BytesIO(b'not excel')},
+            format='multipart'
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
