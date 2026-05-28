@@ -1,11 +1,17 @@
+from decimal import Decimal
+import datetime
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
+
 from apps.imports.services.parser import parse_excel, ParseError
 from apps.imports.services.categorizer import suggest_category
 from apps.imports.services.deduplicator import filter_duplicates
 from apps.accounts.models import Account
+from apps.transactions.models import Transaction
+from apps.categories.models import Category
 
 
 class PreviewView(APIView):
@@ -83,10 +89,8 @@ class ConfirmView(APIView):
                 account_config['id'] = acc.id
                 created_accounts += 1
 
-        from apps.transactions.models import Transaction
-        from apps.categories.models import Category
-        from decimal import Decimal
-        import datetime
+        # Pre-fetch user categories once to avoid N+1 on category lookup
+        categories_by_id = {c.id: c for c in Category.objects.filter(user=request.user)}
 
         for rib, txs in transactions_payload.items():
             account_config = mapping.get(rib, {})
@@ -121,12 +125,7 @@ class ConfirmView(APIView):
                 if key in existing_txs:
                     continue
 
-                category = None
-                if tx.get('category_id'):
-                    try:
-                        category = Category.objects.get(id=tx['category_id'], user=request.user)
-                    except Category.DoesNotExist:
-                        pass
+                category = categories_by_id.get(tx.get('category_id'))
 
                 Transaction.objects.create(
                     user=request.user,
