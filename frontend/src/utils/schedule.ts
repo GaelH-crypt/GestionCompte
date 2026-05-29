@@ -18,12 +18,15 @@ export function expandOccurrences(
   const today = startOfDay(new Date())
   const windowEnd = endOfMonth(addMonths(today, months - 1))
 
+  if (months <= 0) return []
+
   const entries: ScheduleEntry[] = []
 
   for (const item of items) {
     if (!item.is_active) continue
 
     let current = startOfDay(new Date(item.next_occurrence))
+    if (isNaN(current.getTime())) continue
 
     // If next_occurrence is before today, advance until we're in range
     while (current < today) {
