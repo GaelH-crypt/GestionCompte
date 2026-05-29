@@ -87,7 +87,7 @@ export default function CategoriesPage() {
 
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
         {categories.map((cat) => (
-          <Card key={cat.id} className="flex items-center justify-between py-3 px-4">
+          <Card key={cat.id} padding={false} className="flex items-center justify-between py-3 px-4">
             <div className="flex items-center gap-3">
               <div
                 className="h-4 w-4 rounded-full flex-shrink-0"
@@ -95,9 +95,9 @@ export default function CategoriesPage() {
               />
               <div>
                 <span className="text-sm text-gray-200">{cat.name}</span>
-                {cat.subcategories.length > 0 && (
+                {(cat.subcategories ?? []).length > 0 && (
                   <p className="text-xs text-gray-500">
-                    {cat.subcategories.length} sous-catégorie{cat.subcategories.length > 1 ? 's' : ''}
+                    {(cat.subcategories ?? []).length} sous-catégorie{(cat.subcategories ?? []).length > 1 ? 's' : ''}
                   </p>
                 )}
               </div>
