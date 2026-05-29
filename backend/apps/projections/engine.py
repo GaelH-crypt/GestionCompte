@@ -53,13 +53,24 @@ def build_engine_from_user(user, overrides: dict = None) -> ProjectionEngine:
     accounts = Account.objects.filter(user=user, is_active=True)
     total_balance = sum(get_account_balance(a) for a in accounts) or Decimal('0')
 
-    monthly_income = RecurringTransaction.objects.filter(
-        user=user, is_active=True, transaction_type='income', frequency='monthly'
-    ).aggregate(t=Sum('amount'))['t'] or Decimal('0')
+    freq_multipliers = {
+        'monthly': Decimal('1'),
+        'weekly': Decimal('52') / Decimal('12'),
+        'yearly': Decimal('1') / Decimal('12'),
+    }
 
-    monthly_expenses = RecurringTransaction.objects.filter(
-        user=user, is_active=True, transaction_type='expense', frequency='monthly'
-    ).aggregate(t=Sum('amount'))['t'] or Decimal('0')
+    def monthly_sum(transaction_type: str) -> Decimal:
+        total = Decimal('0')
+        for freq, multiplier in freq_multipliers.items():
+            agg = RecurringTransaction.objects.filter(
+                user=user, is_active=True, transaction_type=transaction_type, frequency=freq
+            ).aggregate(t=Sum('amount'))['t']
+            if agg:
+                total += agg * multiplier
+        return total
+
+    monthly_income = monthly_sum('income')
+    monthly_expenses = monthly_sum('expense')
 
     credit_agg = Credit.objects.filter(user=user, is_active=True).aggregate(
         p=Sum('monthly_payment'), ins=Sum('insurance_monthly')
