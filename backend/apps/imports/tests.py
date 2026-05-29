@@ -292,3 +292,63 @@ class PreviewAPITest(TestCase):
             format='multipart'
         )
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+import json
+
+
+class PreviewColumnMappingAPITest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user('colmap_user', password='pass')
+        self.client.force_authenticate(user=self.user)
+
+    def test_unknown_format_returns_422(self):
+        resp = self.client.post(
+            '/api/import/preview/',
+            {'file': io.BytesIO(_make_unknown_format_excel())},
+            format='multipart',
+        )
+        self.assertEqual(resp.status_code, 422)
+        data = resp.json()
+        self.assertEqual(data['error'], 'column_mapping_required')
+        self.assertIn('sheets', data)
+        self.assertGreater(len(data['sheets']), 0)
+        sheet = data['sheets'][0]
+        self.assertIn('name', sheet)
+        self.assertIn('columns', sheet)
+        self.assertIn('sample_rows', sheet)
+
+    def test_generic_format_returns_200(self):
+        resp = self.client.post(
+            '/api/import/preview/',
+            {'file': io.BytesIO(_make_generic_single_amount_excel())},
+            format='multipart',
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn('accounts', data)
+        self.assertIn('transactions', data)
+        self.assertEqual(len(data['accounts']), 1)
+
+    def test_column_hints_accepted(self):
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = 'Data'
+        ws.append(['Timestamp', 'Note', 'Valeur'])
+        ws.append([datetime.datetime(2026, 5, 1), 'Paiement CB', -50.0])
+        ws.append([datetime.datetime(2026, 5, 2), 'Virement', 1000.0])
+        buf = io.BytesIO()
+        wb.save(buf)
+        excel_bytes = buf.getvalue()
+
+        hints = json.dumps({'sheet_name': 'Data', 'date_col': 0, 'description_col': 1, 'amount_col': 2})
+        resp = self.client.post(
+            '/api/import/preview/',
+            {'file': io.BytesIO(excel_bytes), 'column_hints': hints},
+            format='multipart',
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(len(data['accounts']), 1)
+        self.assertEqual(len(data['transactions']['Data']), 2)
