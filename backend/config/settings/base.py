@@ -34,6 +34,7 @@ LOCAL_APPS = [
     'apps.dashboard',
     'apps.projections',
     'apps.seed',
+    'apps.imports',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

@@ -11,4 +11,5 @@ urlpatterns = [
     path('api/credits/', include('apps.credits.urls')),
     path('api/dashboard/', include('apps.dashboard.urls')),
     path('api/projections/', include('apps.projections.urls')),
+    path('api/import/', include('apps.imports.urls')),
 ]

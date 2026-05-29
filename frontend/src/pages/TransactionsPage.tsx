@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  Plus, Trash2, Pencil, Search,
+  Plus, Trash2, Pencil, Search, Upload,
   ArrowUpCircle, ArrowDownCircle, ArrowLeftRight,
 } from 'lucide-react'
 import { transactionsApi } from '@/api/transactions'
@@ -11,6 +11,7 @@ import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { PageSpinner } from '@/components/ui/Spinner'
+import { ImportWizard } from '@/components/ImportWizard/ImportWizard'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import type { Transaction, TransactionType } from '@/types'
@@ -33,6 +34,7 @@ const TYPE_COLOR: Record<TransactionType, string> = {
 export default function TransactionsPage() {
   const qc = useQueryClient()
   const [showForm, setShowForm] = useState(false)
+  const [showImport, setShowImport] = useState(false)
   const [editing, setEditing] = useState<Transaction | null>(null)
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
@@ -45,6 +47,11 @@ export default function TransactionsPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['transactions', params],
     queryFn: () => transactionsApi.list(params).then((r) => r.data),
+  })
+
+  const { data: categoriesData } = useQuery({
+    queryKey: ['categories'],
+    queryFn: () => categoriesApi.list().then((r) => r.data),
   })
 
   const deleteMut = useMutation({
@@ -82,9 +89,14 @@ export default function TransactionsPage() {
             <option value="transfer">Virements</option>
           </select>
         </div>
-        <Button onClick={() => { setEditing(null); setShowForm(true) }}>
-          <Plus className="h-4 w-4" /> Nouvelle transaction
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => setShowImport(true)}>
+            <Upload className="h-4 w-4" /> Importer
+          </Button>
+          <Button onClick={() => { setEditing(null); setShowForm(true) }}>
+            <Plus className="h-4 w-4" /> Nouvelle transaction
+          </Button>
+        </div>
       </div>
 
       {/* Table */}
@@ -182,6 +194,12 @@ export default function TransactionsPage() {
           }}
         />
       )}
+
+      <ImportWizard
+        open={showImport}
+        onOpenChange={setShowImport}
+        categories={categoriesData?.results ?? []}
+      />
     </div>
   )
 }

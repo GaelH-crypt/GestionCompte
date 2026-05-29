@@ -1,0 +1,209 @@
+import io
+import datetime
+import openpyxl
+from django.test import TestCase
+from apps.imports.services.parser import parse_excel
+from apps.imports.services.categorizer import suggest_category
+
+
+def _make_excel():
+    wb = openpyxl.Workbook()
+
+    # Feuille "Vos comptes"
+    ws = wb.active
+    ws.title = 'Vos comptes'
+    ws.append([None])
+    ws.append(['Compte', 'R.I.B.', 'Solde', 'Dev'])
+    ws.append(['C/C EUROCOMPTE CONFORT', '10278 02625 00022060507', 156.22, 'EUR'])
+    ws.append(['LIVRET BLEU', '10278 02625 00023120602', 10.0, 'EUR'])
+
+    # Feuille compte courant
+    wc = wb.create_sheet('Cpt 02625 00022060507')
+    wc.append(['R.I.B. : 10278 02625 00022060507'] + [None] * 6)
+    wc.append([None, None, None, 'Solde initial :', 'Solde initial :', None, 'EUR'])
+    wc.append(['Liste de vos comptes'] * 6 + [None])
+    wc.append(['Date', 'Valeur', 'Libellé', 'Débit', 'Crédit', 'Solde', 'Dev'])
+    wc.append([datetime.datetime(2026, 5, 1), datetime.datetime(2026, 5, 1), 'CARREFOUR MARKET', -42.5, None, None, 'EUR'])
+    wc.append([datetime.datetime(2026, 5, 2), datetime.datetime(2026, 5, 2), 'SALAIRE MAI', None, 2500.0, None, 'EUR'])
+    wc.append([None, None, None, 'Solde au 28/05/2026 :', 'Solde au 28/05/2026 :', 156.22, 'EUR'])
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf
+
+
+class ParserTest(TestCase):
+    def setUp(self):
+        self.file = _make_excel()
+
+    def test_accounts_extracted(self):
+        result = parse_excel(self.file)
+        self.assertEqual(len(result['accounts']), 2)
+        acc = result['accounts'][0]
+        self.assertEqual(acc['name'], 'C/C EUROCOMPTE CONFORT')
+        self.assertEqual(acc['rib'], '10278 02625 00022060507')
+        self.assertAlmostEqual(float(acc['balance']), 156.22)
+
+    def test_transactions_extracted(self):
+        result = parse_excel(self.file)
+        txs = result['transactions']['10278 02625 00022060507']
+        self.assertEqual(len(txs), 2)
+
+    def test_debit_transaction(self):
+        result = parse_excel(self.file)
+        txs = result['transactions']['10278 02625 00022060507']
+        debit = next(t for t in txs if t['transaction_type'] == 'expense')
+        self.assertEqual(debit['description'], 'CARREFOUR MARKET')
+        self.assertAlmostEqual(float(debit['amount']), 42.5)
+        self.assertEqual(debit['date'], '2026-05-01')
+
+    def test_credit_transaction(self):
+        result = parse_excel(self.file)
+        txs = result['transactions']['10278 02625 00022060507']
+        credit = next(t for t in txs if t['transaction_type'] == 'income')
+        self.assertAlmostEqual(float(credit['amount']), 2500.0)
+
+    def test_footer_rows_skipped(self):
+        result = parse_excel(self.file)
+        txs = result['transactions']['10278 02625 00022060507']
+        # La ligne "Solde au ..." ne doit pas apparaître
+        self.assertFalse(any('Solde au' in t['description'] for t in txs))
+
+    def test_rib_consistency(self):
+        result = parse_excel(self.file)
+        account_ribs = {a['rib'] for a in result['accounts']}
+        transaction_ribs = set(result['transactions'].keys())
+        # All transaction RIBs must correspond to an account RIB
+        self.assertTrue(transaction_ribs.issubset(account_ribs))
+
+    def test_parse_excel_accepts_bytes(self):
+        result = parse_excel(_make_excel().read())
+        self.assertIn('accounts', result)
+        self.assertEqual(len(result['accounts']), 2)
+
+
+from django.contrib.auth.models import User
+from apps.accounts.models import Account
+from apps.transactions.models import Transaction as TxModel
+from apps.imports.services.deduplicator import filter_duplicates
+
+
+class DeduplicatorTest(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user('dup_user', password='pass')
+        self.account = Account.objects.create(
+            user=self.user, name='Test', account_type='checking',
+            initial_balance=0, color='#fff', icon='CreditCard'
+        )
+        TxModel.objects.create(
+            user=self.user, account=self.account,
+            transaction_type='expense', amount='42.50',
+            description='CARREFOUR MARKET', date='2026-05-01'
+        )
+
+    def test_existing_transaction_detected(self):
+        candidates = [
+            {'date': '2026-05-01', 'description': 'CARREFOUR MARKET', 'amount': 42.50, 'transaction_type': 'expense'},
+            {'date': '2026-05-02', 'description': 'SALAIRE MAI', 'amount': 2500.0, 'transaction_type': 'income'},
+        ]
+        new_txs, dup_count = filter_duplicates(candidates, self.account.id)
+        self.assertEqual(dup_count, 1)
+        self.assertEqual(len(new_txs), 1)
+        self.assertEqual(new_txs[0]['description'], 'SALAIRE MAI')
+
+    def test_no_duplicates(self):
+        candidates = [
+            {'date': '2026-06-01', 'description': 'LIDL', 'amount': 15.0, 'transaction_type': 'expense'},
+        ]
+        new_txs, dup_count = filter_duplicates(candidates, self.account.id)
+        self.assertEqual(dup_count, 0)
+        self.assertEqual(len(new_txs), 1)
+
+
+class CategorizerTest(TestCase):
+    def test_supermarket(self):
+        self.assertEqual(suggest_category('PAIEMENT CARREFOUR MARKET CARTE'), 'Alimentation')
+
+    def test_rent(self):
+        self.assertEqual(suggest_category('PRLV SEPA OPH DE CALAIS CREANCES LOCATIVES'), 'Logement')
+
+    def test_energy(self):
+        self.assertEqual(suggest_category('PRELEVEMENT EDF PARTICULIERS'), 'Factures')
+
+    def test_transport(self):
+        self.assertEqual(suggest_category('PAIEMENT SNCF BILLETS'), 'Transport')
+
+    def test_salary(self):
+        self.assertEqual(suggest_category('VIREMENT SALAIRE MARS'), 'Revenus')
+
+    def test_no_match(self):
+        self.assertIsNone(suggest_category('OPERATION DIVERSE'))
+
+
+def _make_minimal_excel() -> bytes:
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'Vos comptes'
+    ws.append([None])
+    ws.append(['Compte', 'R.I.B.', 'Solde', 'Dev'])
+    ws.append(['C/C TEST', '10278 00000 00000000001', 100.0, 'EUR'])
+
+    wc = wb.create_sheet('Cpt 00000 00000000001')
+    wc.append(['R.I.B. : 10278 00000 00000000001'] + [None] * 6)
+    wc.append([None] * 7)
+    wc.append(['Liste de vos comptes'] * 6 + [None])
+    wc.append(['Date', 'Valeur', 'Libellé', 'Débit', 'Crédit', 'Solde', 'Dev'])
+    wc.append([datetime.datetime(2026, 4, 1), datetime.datetime(2026, 4, 1), 'LIDL', -15.0, None, None, 'EUR'])
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+from rest_framework.test import APIClient
+from rest_framework import status
+
+
+class PreviewAPITest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user('prev_user', password='pass')
+        self.client.force_authenticate(user=self.user)
+
+    def test_preview_returns_accounts_and_transactions(self):
+        excel_bytes = _make_minimal_excel()
+        resp = self.client.post(
+            '/api/import/preview/',
+            {'file': io.BytesIO(excel_bytes)},
+            format='multipart'
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.json()
+        self.assertIn('accounts', data)
+        self.assertIn('transactions', data)
+        self.assertEqual(len(data['accounts']), 1)
+        self.assertEqual(data['accounts'][0]['name'], 'C/C TEST')
+
+    def test_preview_suggests_category(self):
+        excel_bytes = _make_minimal_excel()
+        resp = self.client.post(
+            '/api/import/preview/',
+            {'file': io.BytesIO(excel_bytes)},
+            format='multipart'
+        )
+        txs = resp.json()['transactions']['10278 00000 00000000001']
+        self.assertEqual(txs[0]['suggested_category'], 'Alimentation')
+
+    def test_preview_requires_auth(self):
+        client = APIClient()
+        resp = client.post('/api/import/preview/', {}, format='multipart')
+        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_preview_rejects_non_xlsx(self):
+        resp = self.client.post(
+            '/api/import/preview/',
+            {'file': io.BytesIO(b'not excel')},
+            format='multipart'
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
