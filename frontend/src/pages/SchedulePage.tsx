@@ -6,13 +6,14 @@ import { recurringApi } from '@/api/recurring'
 import { Card } from '@/components/ui/Card'
 import { PageSpinner } from '@/components/ui/Spinner'
 import { expandOccurrences, type ScheduleEntry } from '@/utils/schedule'
+import type { Frequency } from '@/types'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 
 const formatEur = (n: number | string) =>
   new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(parseFloat(String(n)))
 
-const FREQ_LABELS = { weekly: 'Hebdo', monthly: 'Mensuel', yearly: 'Annuel' } as const
+const FREQ_LABELS: Record<Frequency, string> = { weekly: 'Hebdo', monthly: 'Mensuel', yearly: 'Annuel' }
 
 export default function SchedulePage() {
   const [months, setMonths] = useState(3)
@@ -119,9 +120,9 @@ export default function SchedulePage() {
 
               {/* Entries */}
               <div className="divide-y divide-gray-800/50">
-                {monthEntries.map((entry, idx) => (
+                {monthEntries.map((entry) => (
                   <div
-                    key={idx}
+                    key={`${entry.recurring.id}-${entry.date.toISOString()}`}
                     className="flex items-center gap-4 px-6 py-3 hover:bg-gray-800/20 transition-colors"
                   >
                     {/* Date chip */}
