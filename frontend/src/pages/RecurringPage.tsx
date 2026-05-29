@@ -4,13 +4,14 @@ import { Plus, RefreshCw, Pencil, Trash2 } from 'lucide-react'
 import { recurringApi } from '@/api/recurring'
 import { accountsApi } from '@/api/accounts'
 import { categoriesApi } from '@/api/categories'
+import { creditsApi } from '@/api/credits'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { PageSpinner } from '@/components/ui/Spinner'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import type { Frequency, RecurringTransaction } from '@/types'
+import type { Frequency, RecurringTransaction, Credit } from '@/types'
 
 const formatEur = (n: number | string) =>
   new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(parseFloat(String(n)))
@@ -30,6 +31,12 @@ export default function RecurringPage() {
     queryKey: ['recurring'],
     queryFn: () => recurringApi.list().then((r) => r.data.results),
   })
+
+  const { data: creditsData } = useQuery({
+    queryKey: ['credits'],
+    queryFn: () => creditsApi.list().then((r) => r.data.results),
+  })
+  const credits = creditsData ?? []
 
   const deleteMut = useMutation({
     mutationFn: recurringApi.delete,
@@ -91,7 +98,7 @@ export default function RecurringPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-800">
-                {['Nom', 'Montant', 'Type', 'Fréquence', 'Prochaine échéance', 'Compte', 'Statut', ''].map(
+                {['Nom', 'Montant', 'Type', 'Fréquence', 'Prochaine échéance', 'Compte', 'Prêt', 'Statut', ''].map(
                   (h) => (
                     <th key={h} className="text-left text-xs text-gray-500 font-medium px-6 py-3">
                       {h}
@@ -120,6 +127,7 @@ export default function RecurringPage() {
                     {format(new Date(r.next_occurrence), 'd MMM yyyy', { locale: fr })}
                   </td>
                   <td className="px-6 py-3 text-sm text-gray-400">{r.account_name}</td>
+                  <td className="px-6 py-3 text-sm text-gray-400">{r.credit_name ?? '—'}</td>
                   <td className="px-6 py-3">
                     <Badge variant={r.is_active ? 'success' : 'default'}>
                       {r.is_active ? 'Actif' : 'Inactif'}
@@ -149,7 +157,7 @@ export default function RecurringPage() {
               ))}
               {items.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center text-sm text-gray-500">
+                  <td colSpan={9} className="px-6 py-12 text-center text-sm text-gray-500">
                     <RefreshCw className="h-8 w-8 mx-auto mb-2 opacity-30" />
                     Aucune charge récurrente configurée.
                   </td>
@@ -163,6 +171,7 @@ export default function RecurringPage() {
       {showForm && (
         <RecurringFormModal
           item={editing}
+          credits={credits}
           onClose={() => setShowForm(false)}
           onSaved={() => {
             setShowForm(false)
@@ -179,11 +188,12 @@ export default function RecurringPage() {
 
 interface RecurringFormModalProps {
   item: RecurringTransaction | null
+  credits: Credit[]
   onClose: () => void
   onSaved: () => void
 }
 
-function RecurringFormModal({ item, onClose, onSaved }: RecurringFormModalProps) {
+function RecurringFormModal({ item, credits, onClose, onSaved }: RecurringFormModalProps) {
   const [name, setName] = useState(item?.name ?? '')
   const [amount, setAmount] = useState(item?.amount ?? '')
   const [type, setType] = useState<'income' | 'expense'>(item?.transaction_type ?? 'expense')
@@ -193,6 +203,7 @@ function RecurringFormModal({ item, onClose, onSaved }: RecurringFormModalProps)
   const [categoryId, setCategoryId] = useState<string>(item?.category ? String(item.category) : '')
   const [note, setNote] = useState(item?.note ?? '')
   const [isActive, setIsActive] = useState(item?.is_active ?? true)
+  const [creditId, setCreditId] = useState<string>(item?.credit ? String(item.credit) : '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -227,6 +238,7 @@ function RecurringFormModal({ item, onClose, onSaved }: RecurringFormModalProps)
         next_occurrence: nextOccurrence,
         account: parseInt(accountId),
         category: categoryId ? parseInt(categoryId) : null,
+        credit: creditId ? parseInt(creditId) : null,
         note,
         is_active: isActive,
       }
@@ -334,6 +346,16 @@ function RecurringFormModal({ item, onClose, onSaved }: RecurringFormModalProps)
               className={`${sel} resize-none`}
               placeholder="Remarques…"
             />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-gray-400">Lié à un prêt (optionnel)</label>
+            <select value={creditId} onChange={(e) => setCreditId(e.target.value)} className={sel}>
+              <option value="">Aucun</option>
+              {credits.filter((c) => c.is_active).map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
           </div>
 
           <label className="flex items-center gap-2 cursor-pointer select-none">
