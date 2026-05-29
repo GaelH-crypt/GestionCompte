@@ -52,10 +52,17 @@ class PreviewView(APIView):
         transactions_out = {}
         duplicate_counts = {}
 
+        rib_to_imported_name = {a['rib']: a['name'] for a in parsed['accounts']}
+
         for rib, txs in parsed['transactions'].items():
+            imported_name = rib_to_imported_name.get(rib, '')
             matching_account = next(
-                (a for a in user_accounts if rib in a.name or a.name in rib),
-                None
+                (
+                    a for a in user_accounts
+                    if rib in a.name or a.name in rib
+                    or (imported_name and a.name.lower() == imported_name.lower())
+                ),
+                None,
             )
             account_id = matching_account.id if matching_account else None
 
@@ -135,7 +142,7 @@ class ConfirmView(APIView):
                 amount = Decimal(str(tx['amount'])).quantize(Decimal('0.01'))
                 # tx['date'] is a string like '2026-05-01'
                 date_str = str(tx['date'])
-                key = (date_str, amount, tx['description'])
+                key = (date_str, amount, tx['description'][:255])
                 if key in existing_txs:
                     continue
 
