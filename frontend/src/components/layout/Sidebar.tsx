@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   PiggyBank,
   CalendarDays,
+  Building2,
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
@@ -27,6 +28,7 @@ const NAV_ITEMS = [
   { to: '/schedule', icon: CalendarDays, label: 'Échéancier' },
   { to: '/projections', icon: TrendingUp, label: 'Projections' },
   { to: '/simulations', icon: Beaker, label: 'Simulations' },
+  { to: '/bank-sync', icon: Building2, label: 'Sync bancaire' },
 ]
 
 export default function Sidebar() {
