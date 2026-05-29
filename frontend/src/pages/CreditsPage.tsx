@@ -2,16 +2,29 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { PiggyBank, Pencil, Trash2, Plus } from 'lucide-react'
 import { creditsApi } from '@/api/credits'
+import { recurringApi } from '@/api/recurring'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { PageSpinner } from '@/components/ui/Spinner'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import type { Credit, CreditType } from '@/types'
+import type { Credit, CreditType, RecurringTransaction } from '@/types'
 
 const formatEur = (n: number | string) =>
   new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(parseFloat(String(n)))
+
+function computeMonthlyBreakdown(credit: Credit) {
+  const monthlyRate = parseFloat(credit.interest_rate) / 1200
+  const interest = parseFloat(credit.remaining_capital) * monthlyRate
+  const capital = parseFloat(credit.monthly_payment) - interest
+  const insurance = parseFloat(credit.insurance_monthly)
+  return {
+    interest: Math.max(0, interest),
+    capital: Math.max(0, capital),
+    insurance,
+  }
+}
 
 const CREDIT_TYPE_LABELS: Record<CreditType, string> = {
   mortgage: 'Immobilier',
@@ -37,6 +50,12 @@ export default function CreditsPage() {
       qc.invalidateQueries({ queryKey: ['dashboard'] })
     },
   })
+
+  const { data: recurringData } = useQuery({
+    queryKey: ['recurring'],
+    queryFn: () => recurringApi.list().then((r) => r.data.results),
+  })
+  const allRecurring: RecurringTransaction[] = recurringData ?? []
 
   if (isLoading) return <PageSpinner />
 
@@ -113,10 +132,31 @@ export default function CreditsPage() {
                   <span className="text-gray-400">Capital restant</span>
                   <span className="text-white font-medium">{formatEur(credit.remaining_capital)}</span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">Mensualité totale</span>
-                  <span className="text-orange-400 font-semibold">{formatEur(credit.total_monthly_charge)}</span>
-                </div>
+                {(() => {
+                  const bd = computeMonthlyBreakdown(credit)
+                  return (
+                    <>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-400">Mensualité totale</span>
+                        <span className="text-orange-400 font-semibold">{formatEur(credit.total_monthly_charge)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs pl-3">
+                        <span className="text-gray-500">dont capital</span>
+                        <span className="text-gray-400">{formatEur(bd.capital)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs pl-3">
+                        <span className="text-gray-500">dont intérêts</span>
+                        <span className="text-gray-400">{formatEur(bd.interest)}</span>
+                      </div>
+                      {bd.insurance > 0 && (
+                        <div className="flex justify-between text-xs pl-3">
+                          <span className="text-gray-500">dont assurance</span>
+                          <span className="text-gray-400">{formatEur(bd.insurance)}</span>
+                        </div>
+                      )}
+                    </>
+                  )
+                })()}
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-400">Fin estimée</span>
                   <span className="text-white">
@@ -139,6 +179,24 @@ export default function CreditsPage() {
                 </div>
                 <p className="text-xs text-gray-500">{credit.remaining_months} mois restants</p>
               </div>
+
+              {(() => {
+                const linked = allRecurring.filter((r) => r.credit === credit.id)
+                if (linked.length === 0) return null
+                return (
+                  <div className="mt-4 pt-3 border-t border-gray-800">
+                    <p className="text-xs font-medium text-gray-500 mb-2">Récurrentes liées</p>
+                    <div className="space-y-1">
+                      {linked.map((r) => (
+                        <div key={r.id} className="flex justify-between text-xs">
+                          <span className="text-gray-400">{r.name}</span>
+                          <span className="text-red-400">-{formatEur(r.amount)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })()}
             </Card>
           )
         })}

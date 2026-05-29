@@ -5,6 +5,7 @@ import {
   ArrowUpCircle, ArrowDownCircle, ArrowLeftRight,
 } from 'lucide-react'
 import { transactionsApi } from '@/api/transactions'
+import { recurringApi } from '@/api/recurring'
 import { accountsApi } from '@/api/accounts'
 import { categoriesApi } from '@/api/categories'
 import { Card } from '@/components/ui/Card'
@@ -14,7 +15,7 @@ import { PageSpinner } from '@/components/ui/Spinner'
 import { ImportWizard } from '@/components/ImportWizard/ImportWizard'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import type { Transaction, TransactionType } from '@/types'
+import type { Transaction, TransactionType, Frequency } from '@/types'
 
 const formatEur = (n: number | string) =>
   new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(parseFloat(String(n)))
@@ -51,7 +52,7 @@ export default function TransactionsPage() {
 
   const { data: categoriesData } = useQuery({
     queryKey: ['categories'],
-    queryFn: () => categoriesApi.list().then((r) => r.data),
+    queryFn: () => categoriesApi.list().then((r) => r.data.results),
   })
 
   const deleteMut = useMutation({
@@ -191,6 +192,7 @@ export default function TransactionsPage() {
             qc.invalidateQueries({ queryKey: ['transactions'] })
             qc.invalidateQueries({ queryKey: ['accounts'] })
             qc.invalidateQueries({ queryKey: ['dashboard-summary'] })
+            qc.invalidateQueries({ queryKey: ['recurring'] })
           }}
         />
       )}
@@ -198,7 +200,7 @@ export default function TransactionsPage() {
       <ImportWizard
         open={showImport}
         onOpenChange={setShowImport}
-        categories={categoriesData?.results ?? []}
+        categories={categoriesData ?? []}
       />
     </div>
   )
@@ -223,6 +225,11 @@ function TransactionFormModal({
   const [categoryId, setCategoryId] = useState<number | ''>(transaction?.category ?? '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [isRecurring, setIsRecurring] = useState(transaction?.is_recurring ?? false)
+  const [recurringFrequency, setRecurringFrequency] = useState<Frequency>('monthly')
+  const [recurringNextOccurrence, setRecurringNextOccurrence] = useState(
+    transaction?.date ?? new Date().toISOString().slice(0, 10)
+  )
 
   const { data: accounts } = useQuery({
     queryKey: ['accounts'],
@@ -248,9 +255,29 @@ function TransactionFormModal({
         date,
         account: Number(accountId),
         category: categoryId ? Number(categoryId) : null,
+        is_recurring: isRecurring && type !== 'transfer',
       }
       if (transaction) await transactionsApi.update(transaction.id, payload)
       else await transactionsApi.create(payload)
+
+      if (!transaction && isRecurring && type !== 'transfer') {
+        try {
+          await recurringApi.create({
+            name: description,
+            amount: String(amount),
+            transaction_type: type as 'income' | 'expense',
+            frequency: recurringFrequency,
+            next_occurrence: recurringNextOccurrence,
+            account: Number(accountId),
+            category: categoryId ? Number(categoryId) : null,
+          })
+        } catch {
+          setError('Transaction enregistrée, mais la création de la récurrente a échoué.')
+          setLoading(false)
+          return
+        }
+      }
+
       onSaved()
     } catch {
       setError('Une erreur est survenue. Vérifiez les données.')
@@ -309,7 +336,7 @@ function TransactionFormModal({
               className={sel}
             >
               <option value="">Choisir un compte</option>
-              {(accounts ?? []).map((a) => (
+              {(Array.isArray(accounts) ? accounts : []).map((a) => (
                 <option key={a.id} value={a.id}>{a.name}</option>
               ))}
             </select>
@@ -322,11 +349,50 @@ function TransactionFormModal({
               className={sel}
             >
               <option value="">Sans catégorie</option>
-              {(categories ?? []).map((c) => (
+              {(Array.isArray(categories) ? categories : []).map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
           </div>
+          {type !== 'transfer' && (
+            <div className="border-t border-gray-800 pt-4 space-y-3">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={isRecurring}
+                  onChange={(e) => setIsRecurring(e.target.checked)}
+                  className="accent-brand-500"
+                />
+                <span className="text-sm text-gray-300">Enregistrer comme récurrente</span>
+              </label>
+
+              {isRecurring && (
+                <div className="grid grid-cols-2 gap-3 pl-6">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-sm font-medium text-gray-400">Fréquence</label>
+                    <select
+                      value={recurringFrequency}
+                      onChange={(e) => setRecurringFrequency(e.target.value as Frequency)}
+                      className={sel}
+                    >
+                      <option value="monthly">Mensuel</option>
+                      <option value="weekly">Hebdomadaire</option>
+                      <option value="yearly">Annuel</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-sm font-medium text-gray-400">Prochaine échéance</label>
+                    <input
+                      type="date"
+                      value={recurringNextOccurrence}
+                      onChange={(e) => setRecurringNextOccurrence(e.target.value)}
+                      className={sel}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           {error && <p className="text-sm text-red-400">{error}</p>}
           <div className="flex gap-3 pt-2">
             <Button type="button" variant="secondary" className="flex-1" onClick={onClose}>
