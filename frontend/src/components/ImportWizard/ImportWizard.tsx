@@ -4,14 +4,23 @@ import { X } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { importsApi } from '@/api/imports'
 import { StepUpload } from './StepUpload'
+import { StepColumns } from './StepColumns'
 import { StepMapping } from './StepMapping'
 import { StepPreview } from './StepPreview'
 import { Button } from '@/components/ui/Button'
 import type {
   PreviewResponse, AccountMapping, ImportedTransaction, Category,
+  SheetMeta, ColumnHints,
 } from '@/types'
 
-type Step = 'upload' | 'mapping' | 'preview'
+type Step = 'upload' | 'columns' | 'mapping' | 'preview'
+
+const STEP_NAMES: Record<Step, string> = {
+  upload: 'Fichier',
+  columns: 'Colonnes',
+  mapping: 'Comptes',
+  preview: 'Confirmation',
+}
 
 interface Props {
   open: boolean
@@ -19,17 +28,13 @@ interface Props {
   categories: Category[]
 }
 
-const STEP_LABELS: Record<Step, string> = {
-  upload: '1. Fichier',
-  mapping: '2. Comptes',
-  preview: '3. Confirmation',
-}
-
 export function ImportWizard({ open, onOpenChange, categories }: Props) {
   const qc = useQueryClient()
   const [step, setStep] = useState<Step>('upload')
+  const [file, setFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [columnSheets, setColumnSheets] = useState<SheetMeta[] | null>(null)
   const [preview, setPreview] = useState<PreviewResponse | null>(null)
   const [mapping, setMapping] = useState<Record<string, AccountMapping>>({})
   const [transactions, setTransactions] = useState<Record<string, ImportedTransaction[]>>({})
@@ -37,18 +42,21 @@ export function ImportWizard({ open, onOpenChange, categories }: Props) {
 
   const reset = () => {
     setStep('upload')
+    setFile(null)
     setUploading(false)
     setUploadError(null)
+    setColumnSheets(null)
     setPreview(null)
     setMapping({})
     setTransactions({})
   }
 
-  const handleFile = async (file: File) => {
+  const handleFile = async (f: File, columnHints?: ColumnHints) => {
+    setFile(f)
     setUploading(true)
     setUploadError(null)
     try {
-      const { data } = await importsApi.preview(file)
+      const { data } = await importsApi.preview(f, columnHints)
       setPreview(data)
       const initMapping: Record<string, AccountMapping> = {}
       for (const acc of data.accounts) {
@@ -69,16 +77,34 @@ export function ImportWizard({ open, onOpenChange, categories }: Props) {
       setTransactions(txsWithRecurring)
       setStep('mapping')
     } catch (err: unknown) {
-      const apiMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
-      setUploadError(apiMsg ?? "Erreur lors de la lecture du fichier. Vérifiez qu'il s'agit d'un export Crédit Mutuel.")
+      const response = (err as { response?: { status?: number; data?: { error?: string; sheets?: SheetMeta[] } } })?.response
+      if (response?.status === 422 && response?.data?.error === 'column_mapping_required') {
+        setColumnSheets(response.data.sheets ?? null)
+        setStep('columns')
+      } else {
+        setUploadError("Erreur lors de la lecture du fichier. Vérifiez qu'il s'agit d'un export bancaire valide (.xlsx).")
+      }
     } finally {
       setUploading(false)
     }
   }
 
-  const canProceedMapping = preview !== null && Object.values(mapping).every(
-    (m) => m.create ? m.name.trim().length > 0 : Boolean(m.id)
+  const handleColumnsSubmit = (hints: ColumnHints) => {
+    if (file) handleFile(file, hints)
+  }
+
+  const steps: Step[] = columnSheets !== null
+    ? ['upload', 'columns', 'mapping', 'preview']
+    : ['upload', 'mapping', 'preview']
+
+  const stepLabels = steps.reduce<Record<Step, string>>(
+    (acc, s, i) => ({ ...acc, [s]: `${i + 1}. ${STEP_NAMES[s]}` }),
+    {} as Record<Step, string>,
   )
+
+  const canProceedMapping =
+    preview !== null &&
+    Object.values(mapping).every((m) => (m.create ? m.name.trim().length > 0 : Boolean(m.id)))
 
   const handleCategoryChange = (rib: string, index: number, categoryId: number | null) => {
     setTransactions((prev) => {
@@ -110,21 +136,28 @@ export function ImportWizard({ open, onOpenChange, categories }: Props) {
     }
   }
 
-  const steps: Step[] = ['upload', 'mapping', 'preview']
+  const handleBack = () => {
+    const idx = steps.indexOf(step)
+    const prev = idx > 0 ? steps[idx - 1] : 'upload'
+    if (prev === 'upload') {
+      setColumnSheets(null)
+      setFile(null)
+    }
+    setStep(prev)
+  }
 
   return (
     <Dialog.Root open={open} onOpenChange={(v) => { if (!v) reset(); onOpenChange(v) }}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40" />
         <Dialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-2xl max-h-[90vh] flex flex-col bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl">
-          {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
             <div>
               <Dialog.Title className="text-base font-semibold text-gray-100">
                 Importer un fichier
               </Dialog.Title>
               <Dialog.Description className="sr-only">
-                Assistant d'importation de relevé bancaire Crédit Mutuel
+                Assistant d'importation de relevé bancaire
               </Dialog.Description>
               <div className="flex gap-3 mt-1">
                 {steps.map((s) => (
@@ -132,7 +165,7 @@ export function ImportWizard({ open, onOpenChange, categories }: Props) {
                     key={s}
                     className={`text-xs ${s === step ? 'text-brand-400 font-medium' : 'text-gray-600'}`}
                   >
-                    {STEP_LABELS[s]}
+                    {stepLabels[s]}
                   </span>
                 ))}
               </div>
@@ -144,10 +177,12 @@ export function ImportWizard({ open, onOpenChange, categories }: Props) {
             </Dialog.Close>
           </div>
 
-          {/* Body */}
           <div className="flex-1 overflow-y-auto px-6 py-5">
             {step === 'upload' && (
               <StepUpload onFile={handleFile} loading={uploading} error={uploadError} />
+            )}
+            {step === 'columns' && columnSheets && (
+              <StepColumns sheets={columnSheets} onSubmit={handleColumnsSubmit} loading={uploading} />
             )}
             {step === 'mapping' && preview && (
               <StepMapping
@@ -169,14 +204,9 @@ export function ImportWizard({ open, onOpenChange, categories }: Props) {
             )}
           </div>
 
-          {/* Footer */}
           {step !== 'upload' && (
             <div className="flex justify-between items-center px-6 py-4 border-t border-gray-800">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setStep(step === 'preview' ? 'mapping' : 'upload')}
-              >
+              <Button variant="secondary" size="sm" onClick={handleBack}>
                 Retour
               </Button>
               {step === 'mapping' && (
