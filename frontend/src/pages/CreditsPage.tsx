@@ -32,7 +32,10 @@ export default function CreditsPage() {
 
   const deleteMut = useMutation({
     mutationFn: creditsApi.delete,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['credits'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['credits'] })
+      qc.invalidateQueries({ queryKey: ['dashboard'] })
+    },
   })
 
   if (isLoading) return <PageSpinner />
@@ -201,7 +204,7 @@ function CreditFormModal({ credit, onClose, onSaved }: CreditFormModalProps) {
         remaining_capital: remainingCapital,
         interest_rate: interestRate,
         monthly_payment: monthlyPayment,
-        insurance_monthly: insuranceMonthly,
+        insurance_monthly: insuranceMonthly || '0',
         duration_months: Number(durationMonths),
         start_date: startDate,
         end_date: endDate || null,
