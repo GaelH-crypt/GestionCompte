@@ -37,7 +37,7 @@ export function StepUpload({ onFile, loading, error }: Props) {
       >
         <Upload className="h-8 w-8 text-gray-500" />
         <p className="text-sm text-gray-400">Glisser un fichier <span className="font-medium text-gray-200">.xlsx</span> ou cliquer pour sélectionner</p>
-        <p className="text-xs text-gray-600">Export Crédit Mutuel uniquement</p>
+        <p className="text-xs text-gray-600">Fichier bancaire Excel</p>
         <Button size="sm" variant="secondary" type="button" loading={loading}>
           Choisir un fichier
         </Button>
