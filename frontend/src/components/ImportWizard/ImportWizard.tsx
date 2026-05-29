@@ -68,11 +68,18 @@ export function ImportWizard({ open, onOpenChange, categories }: Props) {
         }
       }
       setMapping(initMapping)
-      setTransactions(data.transactions)
+      const txsWithRecurring = Object.fromEntries(
+        Object.entries(data.transactions).map(([rib, txs]) => [
+          rib,
+          txs.map((tx) => ({ ...tx, is_recurring: false })),
+        ])
+      )
+      setTransactions(txsWithRecurring)
       setStep('mapping')
-    } catch (err: any) {
-      if (err?.response?.status === 422 && err?.response?.data?.error === 'column_mapping_required') {
-        setColumnSheets(err.response.data.sheets)
+    } catch (err: unknown) {
+      const response = (err as { response?: { status?: number; data?: { error?: string; sheets?: SheetMeta[] } } })?.response
+      if (response?.status === 422 && response?.data?.error === 'column_mapping_required') {
+        setColumnSheets(response.data.sheets ?? null)
         setStep('columns')
       } else {
         setUploadError("Erreur lors de la lecture du fichier. Vérifiez qu'il s'agit d'un export bancaire valide (.xlsx).")
@@ -103,6 +110,14 @@ export function ImportWizard({ open, onOpenChange, categories }: Props) {
     setTransactions((prev) => {
       const updated = [...(prev[rib] ?? [])]
       updated[index] = { ...updated[index], category_id: categoryId }
+      return { ...prev, [rib]: updated }
+    })
+  }
+
+  const handleRecurringChange = (rib: string, index: number, isRecurring: boolean) => {
+    setTransactions((prev) => {
+      const updated = [...(prev[rib] ?? [])]
+      updated[index] = { ...updated[index], is_recurring: isRecurring }
       return { ...prev, [rib]: updated }
     })
   }
@@ -141,6 +156,9 @@ export function ImportWizard({ open, onOpenChange, categories }: Props) {
               <Dialog.Title className="text-base font-semibold text-gray-100">
                 Importer un fichier
               </Dialog.Title>
+              <Dialog.Description className="sr-only">
+                Assistant d'importation de relevé bancaire
+              </Dialog.Description>
               <div className="flex gap-3 mt-1">
                 {steps.map((s) => (
                   <span
@@ -181,6 +199,7 @@ export function ImportWizard({ open, onOpenChange, categories }: Props) {
                 duplicateCounts={preview.duplicate_counts}
                 categories={categories}
                 onChange={handleCategoryChange}
+                onRecurringChange={handleRecurringChange}
               />
             )}
           </div>

@@ -2,8 +2,35 @@ import io
 import datetime
 import openpyxl
 from django.test import TestCase
-from apps.imports.services.parser import parse_excel, ColumnMappingRequired
+from apps.imports.services.parser import parse_excel, ColumnMappingRequired, _to_float
 from apps.imports.services.categorizer import suggest_category
+
+
+class ToFloatTest(TestCase):
+    def test_plain_float(self):
+        self.assertAlmostEqual(_to_float(1234.56), 1234.56)
+
+    def test_comma_decimal(self):
+        self.assertAlmostEqual(_to_float('1234,56'), 1234.56)
+
+    def test_comma_thousands_dot_decimal(self):
+        self.assertAlmostEqual(_to_float('1,234.56'), 1234.56)
+
+    def test_dot_thousands_comma_decimal(self):
+        self.assertAlmostEqual(_to_float('1.234,56'), 1234.56)
+
+    def test_nbsp_thousands(self):
+        self.assertAlmostEqual(_to_float('1\xa0234,56'), 1234.56)
+
+    def test_none_returns_none(self):
+        self.assertIsNone(_to_float(None))
+
+    def test_nan_returns_none(self):
+        import math
+        self.assertIsNone(_to_float(float('nan')))
+
+    def test_text_returns_none(self):
+        self.assertIsNone(_to_float('abc'))
 
 
 def _make_excel():

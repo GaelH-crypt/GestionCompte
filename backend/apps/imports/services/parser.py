@@ -119,7 +119,15 @@ def _to_float(v) -> float | None:
         return float(v)
     except (ValueError, TypeError):
         try:
-            return float(str(v).replace('\xa0', '').replace(' ', '').replace(',', '.'))
+            s = str(v).replace('\xa0', '').replace(' ', '')
+            if ',' in s and '.' in s:
+                if s.index(',') < s.index('.'):
+                    s = s.replace(',', '')        # "1,234.56" → "1234.56"
+                else:
+                    s = s.replace('.', '').replace(',', '.')  # "1.234,56" → "1234.56"
+            else:
+                s = s.replace(',', '.')           # "1234,56" → "1234.56"
+            return float(s)
         except (ValueError, TypeError):
             return None
 
