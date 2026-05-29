@@ -39,6 +39,7 @@ export function ImportWizard({ open, onOpenChange, categories }: Props) {
   const [mapping, setMapping] = useState<Record<string, AccountMapping>>({})
   const [transactions, setTransactions] = useState<Record<string, ImportedTransaction[]>>({})
   const [confirming, setConfirming] = useState(false)
+  const [confirmError, setConfirmError] = useState<string | null>(null)
 
   const reset = () => {
     setStep('upload')
@@ -49,6 +50,7 @@ export function ImportWizard({ open, onOpenChange, categories }: Props) {
     setPreview(null)
     setMapping({})
     setTransactions({})
+    setConfirmError(null)
   }
 
   const handleFile = async (f: File, columnHints?: ColumnHints) => {
@@ -60,11 +62,24 @@ export function ImportWizard({ open, onOpenChange, categories }: Props) {
       setPreview(data)
       const initMapping: Record<string, AccountMapping> = {}
       for (const acc of data.accounts) {
-        initMapping[acc.rib] = {
-          rib: acc.rib,
-          create: true,
-          name: acc.name,
-          account_type: 'checking',
+        const match = data.existing_accounts.find(
+          (e) => e.name.toLowerCase() === acc.name.toLowerCase()
+        )
+        if (match) {
+          initMapping[acc.rib] = {
+            rib: acc.rib,
+            create: false,
+            id: match.id,
+            name: match.name,
+            account_type: match.account_type,
+          }
+        } else {
+          initMapping[acc.rib] = {
+            rib: acc.rib,
+            create: true,
+            name: acc.name,
+            account_type: 'checking',
+          }
         }
       }
       setMapping(initMapping)
@@ -124,6 +139,7 @@ export function ImportWizard({ open, onOpenChange, categories }: Props) {
 
   const handleConfirm = async () => {
     setConfirming(true)
+    setConfirmError(null)
     try {
       await importsApi.confirm({ mapping, transactions })
       qc.invalidateQueries({ queryKey: ['transactions'] })
@@ -131,6 +147,8 @@ export function ImportWizard({ open, onOpenChange, categories }: Props) {
       qc.invalidateQueries({ queryKey: ['dashboard'] })
       onOpenChange(false)
       reset()
+    } catch {
+      setConfirmError("Une erreur s'est produite lors de l'importation. Veuillez réessayer.")
     } finally {
       setConfirming(false)
     }
@@ -215,9 +233,14 @@ export function ImportWizard({ open, onOpenChange, categories }: Props) {
                 </Button>
               )}
               {step === 'preview' && (
-                <Button onClick={handleConfirm} loading={confirming}>
-                  Importer
-                </Button>
+                <div className="flex items-center gap-3">
+                  {confirmError && (
+                    <span className="text-xs text-red-400">{confirmError}</span>
+                  )}
+                  <Button onClick={handleConfirm} loading={confirming}>
+                    Importer
+                  </Button>
+                </div>
               )}
             </div>
           )}

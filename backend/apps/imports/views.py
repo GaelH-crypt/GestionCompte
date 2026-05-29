@@ -146,7 +146,7 @@ class ConfirmView(APIView):
                     account=account,
                     transaction_type=tx['transaction_type'],
                     amount=amount,
-                    description=tx['description'],
+                    description=tx['description'][:255],
                     date=tx['date'],
                     category=category,
                     is_recurring=bool(tx.get('is_recurring', False)),
