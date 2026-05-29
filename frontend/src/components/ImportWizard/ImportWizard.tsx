@@ -60,10 +60,17 @@ export function ImportWizard({ open, onOpenChange, categories }: Props) {
         }
       }
       setMapping(initMapping)
-      setTransactions(data.transactions)
+      const txsWithRecurring = Object.fromEntries(
+        Object.entries(data.transactions).map(([rib, txs]) => [
+          rib,
+          txs.map((tx) => ({ ...tx, is_recurring: false })),
+        ])
+      )
+      setTransactions(txsWithRecurring)
       setStep('mapping')
-    } catch {
-      setUploadError("Erreur lors de la lecture du fichier. Vérifiez qu'il s'agit d'un export Crédit Mutuel.")
+    } catch (err: unknown) {
+      const apiMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
+      setUploadError(apiMsg ?? "Erreur lors de la lecture du fichier. Vérifiez qu'il s'agit d'un export Crédit Mutuel.")
     } finally {
       setUploading(false)
     }
@@ -77,6 +84,14 @@ export function ImportWizard({ open, onOpenChange, categories }: Props) {
     setTransactions((prev) => {
       const updated = [...(prev[rib] ?? [])]
       updated[index] = { ...updated[index], category_id: categoryId }
+      return { ...prev, [rib]: updated }
+    })
+  }
+
+  const handleRecurringChange = (rib: string, index: number, isRecurring: boolean) => {
+    setTransactions((prev) => {
+      const updated = [...(prev[rib] ?? [])]
+      updated[index] = { ...updated[index], is_recurring: isRecurring }
       return { ...prev, [rib]: updated }
     })
   }
@@ -108,6 +123,9 @@ export function ImportWizard({ open, onOpenChange, categories }: Props) {
               <Dialog.Title className="text-base font-semibold text-gray-100">
                 Importer un fichier
               </Dialog.Title>
+              <Dialog.Description className="sr-only">
+                Assistant d'importation de relevé bancaire Crédit Mutuel
+              </Dialog.Description>
               <div className="flex gap-3 mt-1">
                 {steps.map((s) => (
                   <span
@@ -146,6 +164,7 @@ export function ImportWizard({ open, onOpenChange, categories }: Props) {
                 duplicateCounts={preview.duplicate_counts}
                 categories={categories}
                 onChange={handleCategoryChange}
+                onRecurringChange={handleRecurringChange}
               />
             )}
           </div>

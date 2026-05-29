@@ -135,6 +135,7 @@ class ConfirmView(APIView):
                     description=tx['description'],
                     date=tx['date'],
                     category=category,
+                    is_recurring=bool(tx.get('is_recurring', False)),
                     note='',
                     tags=[],
                 )

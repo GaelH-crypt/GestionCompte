@@ -6,6 +6,7 @@ interface Props {
   duplicateCounts: Record<string, number>
   categories: Category[]
   onChange: (rib: string, index: number, categoryId: number | null) => void
+  onRecurringChange: (rib: string, index: number, isRecurring: boolean) => void
 }
 
 const formatEur = (n: number) =>
@@ -13,7 +14,7 @@ const formatEur = (n: number) =>
 
 const sel = 'bg-gray-800 border border-gray-700 rounded-md px-2 py-1 text-xs text-gray-100 focus:outline-none focus:ring-1 focus:ring-brand-500'
 
-export function StepPreview({ transactions, mapping, duplicateCounts, categories, onChange }: Props) {
+export function StepPreview({ transactions, mapping, duplicateCounts, categories, onChange, onRecurringChange }: Props) {
   const totalNew = Object.values(transactions).reduce((s, txs) => s + txs.length, 0)
   const totalDup = Object.values(duplicateCounts).reduce((s, n) => s + n, 0)
 
@@ -34,7 +35,7 @@ export function StepPreview({ transactions, mapping, duplicateCounts, categories
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-gray-800">
-                    {['Date', 'Libellé', 'Montant', 'Catégorie'].map((h) => (
+                    {['Date', 'Libellé', 'Montant', 'Catégorie', 'Récurrent'].map((h) => (
                       <th key={h} className="text-left text-gray-500 px-2 py-2 font-medium">{h}</th>
                     ))}
                   </tr>
@@ -58,6 +59,15 @@ export function StepPreview({ transactions, mapping, duplicateCounts, categories
                             <option key={c.id} value={c.id}>{c.name}</option>
                           ))}
                         </select>
+                      </td>
+                      <td className="px-2 py-2 text-center">
+                        <input
+                          type="checkbox"
+                          checked={tx.is_recurring ?? false}
+                          onChange={(e) => onRecurringChange(rib, i, e.target.checked)}
+                          className="accent-brand-500 h-3.5 w-3.5 cursor-pointer"
+                          title="Charge fixe / récurrente"
+                        />
                       </td>
                     </tr>
                   ))}
