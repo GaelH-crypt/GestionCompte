@@ -101,11 +101,13 @@ def build_engine_from_user(user, overrides: dict = None) -> ProjectionEngine:
             })
             occ = occ + relativedelta(years=1)
 
-    # Only count credits that have NO linked active recurring transaction.
-    # Credits that do have one are already represented in monthly_expenses above.
+    # Only count credits that have NO linked active recurring transaction that
+    # already contributes to monthly_expenses (expense, monthly or weekly).
+    # Yearly or income recurrences do not replace the monthly credit charge.
     covered_credit_ids = list(
         RecurringTransaction.objects.filter(
-            user=user, is_active=True, credit__isnull=False
+            user=user, is_active=True, credit__isnull=False,
+            transaction_type='expense', frequency__in=('monthly', 'weekly'),
         ).values_list('credit_id', flat=True).distinct()
     )
     credit_agg = Credit.objects.filter(
