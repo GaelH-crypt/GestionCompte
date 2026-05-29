@@ -112,10 +112,22 @@ _COLUMN_KEYWORDS: dict[str, list[str]] = {
 }
 
 
+def _to_float(v) -> float | None:
+    if not pd.notna(v):
+        return None
+    try:
+        return float(v)
+    except (ValueError, TypeError):
+        try:
+            return float(str(v).replace('\xa0', '').replace(' ', '').replace(',', '.'))
+        except (ValueError, TypeError):
+            return None
+
+
 def _score_row(row: list) -> int:
     found: set[str] = set()
     for cell in row:
-        cell_str = str(cell).lower().strip() if cell is not None else ''
+        cell_str = str(cell).lower().strip() if (cell is not None and pd.notna(cell)) else ''
         for col_type, keywords in _COLUMN_KEYWORDS.items():
             if any(kw in cell_str for kw in keywords):
                 found.add(col_type)
@@ -179,16 +191,16 @@ def _parse_generic_sheet(xl: pd.ExcelFile, sheet_name: str, col_map: dict) -> li
         amt_idx = col_map.get('amount_col')
         if amt_idx is not None and amt_idx < len(row_list):
             v = row_list[amt_idx]
-            amount_val = float(v) if pd.notna(v) else None
+            amount_val = _to_float(v)
         else:
             deb_idx = col_map.get('debit_col')
             cre_idx = col_map.get('credit_col')
             if deb_idx is not None and deb_idx < len(row_list):
                 v = row_list[deb_idx]
-                debit = float(v) if pd.notna(v) else None
+                debit = _to_float(v)
             if cre_idx is not None and cre_idx < len(row_list):
                 v = row_list[cre_idx]
-                credit = float(v) if pd.notna(v) else None
+                credit = _to_float(v)
 
         if amount_val is not None:
             if amount_val < 0:
@@ -216,6 +228,7 @@ def _parse_generic_sheet(xl: pd.ExcelFile, sheet_name: str, col_map: dict) -> li
 def _parse_generic_excel(xl: pd.ExcelFile, column_hints: dict | None = None) -> dict:
     accounts: list[dict] = []
     transactions: dict = {}
+    hints_matched_sheet = False
 
     for sheet_name in xl.sheet_names:
         raw = xl.parse(sheet_name, header=None)
@@ -228,6 +241,7 @@ def _parse_generic_excel(xl: pd.ExcelFile, column_hints: dict | None = None) -> 
         )
 
         if hints_apply:
+            hints_matched_sheet = True
             col_map = {k: v for k, v in column_hints.items() if k.endswith('_col') and v is not None}
         else:
             header_idx = _detect_header_row(raw)
@@ -244,13 +258,14 @@ def _parse_generic_excel(xl: pd.ExcelFile, column_hints: dict | None = None) -> 
             transactions[sheet_name] = txs
 
     if not accounts:
-        if column_hints is not None:
-            # Hints provided but produced 0 transactions — return empty rather than asking again
+        if column_hints is not None and hints_matched_sheet:
+            # Hints matched a sheet but produced 0 valid transactions — return empty rather than asking again
             return {'accounts': [], 'transactions': {}}
+        # Either no hints or hints didn't match any sheet — ask for manual mapping
         sheets_meta = []
         for sheet_name in xl.sheet_names:
             raw = xl.parse(sheet_name, header=None)
-            if raw.empty:
+            if raw.empty or len(raw) < 2:
                 continue
             header_idx = _detect_header_row(raw) or 0
             columns = [str(c) if pd.notna(c) else '' for c in raw.iloc[header_idx].tolist()]

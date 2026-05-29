@@ -222,7 +222,6 @@ class GenericParserTest(TestCase):
         self.assertEqual(len(result['transactions']['Data']), 2)
 
     def test_credit_mutuel_still_works(self):
-        from apps.imports.tests import _make_excel
         result = parse_excel(_make_excel())
         self.assertEqual(len(result['accounts']), 2)
 
