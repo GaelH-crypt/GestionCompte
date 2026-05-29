@@ -6,6 +6,11 @@ class ParseError(Exception):
     pass
 
 
+def _norm_rib(rib: str) -> str:
+    """Normalise un RIB pour comparaison : sans espaces, majuscules."""
+    return rib.replace(' ', '').upper()
+
+
 class ColumnMappingRequired(Exception):
     def __init__(self, sheets: list[dict]):
         self.sheets = sheets
@@ -103,11 +108,17 @@ def _parse_account_sheet(xl: pd.ExcelFile, sheet_name: str) -> tuple[str, list[d
 
 def _parse_credit_mutuel(xl: pd.ExcelFile) -> dict:
     accounts = _parse_accounts_sheet(xl)
+    # Map normalised RIB → canonical RIB from the accounts sheet so that
+    # transaction-sheet RIBs (which may differ in spacing/case) use the
+    # same key as the account they belong to.
+    norm_to_canonical = {_norm_rib(a['rib']): a['rib'] for a in accounts}
+
     transactions: dict = {}
     for sheet in xl.sheet_names:
         if sheet.startswith('Cpt '):
-            rib, txs = _parse_account_sheet(xl, sheet)
-            transactions.setdefault(rib, []).extend(txs)
+            raw_rib, txs = _parse_account_sheet(xl, sheet)
+            canonical_rib = norm_to_canonical.get(_norm_rib(raw_rib), raw_rib)
+            transactions.setdefault(canonical_rib, []).extend(txs)
     return {'accounts': accounts, 'transactions': transactions}
 
 

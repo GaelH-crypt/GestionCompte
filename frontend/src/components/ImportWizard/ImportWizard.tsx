@@ -316,18 +316,32 @@ function StepResult({ result, error, mapping }: StepResultProps) {
     .filter((m) => m.create)
     .map((m) => m.name)
 
-  const allDuplicates = result.created_transactions === 0 && result.created_accounts === 0
+  const skippedRibs = result.skipped_ribs ?? []
+  const hasSkipped = skippedRibs.length > 0
+  const allDuplicates = result.created_transactions === 0 && result.created_accounts === 0 && !hasSkipped
 
   return (
     <div className="flex flex-col items-center gap-5 py-8 text-center">
-      {allDuplicates ? (
+      {hasSkipped ? (
+        <AlertCircle className="h-12 w-12 text-red-400" />
+      ) : allDuplicates ? (
         <Info className="h-12 w-12 text-yellow-400" />
       ) : (
         <CheckCircle2 className="h-12 w-12 text-green-400" />
       )}
 
       <div className="space-y-1">
-        {allDuplicates ? (
+        {hasSkipped ? (
+          <>
+            <p className="text-base font-semibold text-gray-100">Comptes non associés</p>
+            <p className="text-sm text-red-400">
+              {skippedRibs.length} compte{skippedRibs.length > 1 ? 's' : ''} ignoré{skippedRibs.length > 1 ? 's' : ''} — aucun identifiant de compte trouvé dans le mapping.
+            </p>
+            <div className="text-xs text-gray-500 mt-1 space-y-0.5">
+              {skippedRibs.map((r) => <p key={r}>{r}</p>)}
+            </div>
+          </>
+        ) : allDuplicates ? (
           <>
             <p className="text-base font-semibold text-gray-100">Aucune nouvelle transaction</p>
             <p className="text-sm text-gray-400">
