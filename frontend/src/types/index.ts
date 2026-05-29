@@ -241,4 +241,5 @@ export interface ConfirmPayload {
 export interface ConfirmResponse {
   created_accounts: number
   created_transactions: number
+  skipped_ribs?: string[]
 }
