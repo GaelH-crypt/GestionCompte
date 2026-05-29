@@ -20,19 +20,33 @@ def _rib_from_sheet_name(sheet_name: str) -> str:
     return sheet_name
 
 
+def _find_header_row(xl: pd.ExcelFile, sheet_name: str, keyword: str) -> int:
+    """Trouve l'index de la ligne contenant keyword dans la première colonne."""
+    raw = xl.parse(sheet_name, header=None, usecols=[0])
+    for i, val in enumerate(raw.iloc[:, 0]):
+        if isinstance(val, str) and keyword.lower() in val.lower():
+            return i
+    return 1
+
+
 def _parse_accounts_sheet(xl: pd.ExcelFile) -> list[dict]:
     try:
-        df = xl.parse('Vos comptes', header=1, usecols=range(4))
+        header_row = _find_header_row(xl, 'Vos comptes', 'Compte')
+        df = xl.parse('Vos comptes', header=header_row, usecols=range(4))
     except Exception as e:
-        raise ParseError("Sheet 'Vos comptes' not found.") from e
+        raise ParseError("Feuille 'Vos comptes' introuvable. Vérifiez qu'il s'agit d'un export bancaire valide.") from e
     df.columns = ['name', 'rib', 'balance', 'currency']
     df = df.dropna(subset=['name'])
     df = df[df['name'].astype(str).str.strip() != '']
+    df = df[~df['balance'].astype(str).str.lower().isin(['solde', 'balance', 'nan'])]
     accounts = []
     for _, row in df.iterrows():
         name = str(row['name']).strip()
         rib = str(row['rib']).strip() if pd.notna(row['rib']) else ''
-        balance = float(row['balance']) if pd.notna(row['balance']) else 0.0
+        try:
+            balance = float(row['balance']) if pd.notna(row['balance']) else 0.0
+        except (ValueError, TypeError):
+            balance = 0.0
         accounts.append({'name': name, 'rib': rib, 'balance': balance})
     return accounts
 
