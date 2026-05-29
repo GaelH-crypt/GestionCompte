@@ -11,6 +11,7 @@ import {
   LogOut,
   ChevronLeft,
   PiggyBank,
+  CalendarDays,
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
@@ -23,6 +24,7 @@ const NAV_ITEMS = [
   { to: '/categories', icon: Tag, label: 'Catégories' },
   { to: '/credits', icon: PiggyBank, label: 'Crédits' },
   { to: '/recurring', icon: RefreshCw, label: 'Charges fixes' },
+  { to: '/schedule', icon: CalendarDays, label: 'Échéancier' },
   { to: '/projections', icon: TrendingUp, label: 'Projections' },
   { to: '/simulations', icon: Beaker, label: 'Simulations' },
 ]
