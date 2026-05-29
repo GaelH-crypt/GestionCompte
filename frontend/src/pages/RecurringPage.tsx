@@ -33,7 +33,12 @@ export default function RecurringPage() {
 
   const deleteMut = useMutation({
     mutationFn: recurringApi.delete,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['recurring'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['recurring'] })
+      qc.invalidateQueries({ queryKey: ['dashboard-summary'] })
+      qc.invalidateQueries({ queryKey: ['dashboard-history'] })
+      qc.invalidateQueries({ queryKey: ['projections'] })
+    },
   })
 
   if (isLoading) return <PageSpinner />
@@ -162,6 +167,9 @@ export default function RecurringPage() {
           onSaved={() => {
             setShowForm(false)
             qc.invalidateQueries({ queryKey: ['recurring'] })
+            qc.invalidateQueries({ queryKey: ['dashboard-summary'] })
+            qc.invalidateQueries({ queryKey: ['dashboard-history'] })
+            qc.invalidateQueries({ queryKey: ['projections'] })
           }}
         />
       )}
