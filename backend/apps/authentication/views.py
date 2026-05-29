@@ -1,10 +1,13 @@
 from django.contrib.auth.models import User
+from django.utils.decorators import method_decorator
+from django_ratelimit.decorators import ratelimit
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import TokenError
 
 from .serializers import CustomTokenObtainPairSerializer, UserSerializer, ChangePasswordSerializer
 
@@ -12,6 +15,10 @@ from .serializers import CustomTokenObtainPairSerializer, UserSerializer, Change
 class LoginView(TokenObtainPairView):
     permission_classes = (AllowAny,)
     serializer_class = CustomTokenObtainPairSerializer
+
+    @method_decorator(ratelimit(key='ip', rate='5/m', block=True))
+    def post(self, request, *args, **kwargs):
+        return super().post(request, *args, **kwargs)
 
 
 @api_view(['POST'])
@@ -22,8 +29,11 @@ def logout_view(request):
         if refresh_token:
             token = RefreshToken(refresh_token)
             token.blacklist()
-    except Exception:
+    except TokenError:
+        # Token already blacklisted (e.g. rotated) or expired — session is already invalid.
         pass
+    except Exception:
+        return Response({'detail': 'Erreur lors de la déconnexion.'}, status=status.HTTP_400_BAD_REQUEST)
     return Response({'detail': 'Déconnexion réussie.'}, status=status.HTTP_200_OK)
 
 
