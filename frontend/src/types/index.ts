@@ -200,6 +200,7 @@ export interface ImportedTransaction {
   transaction_type: TransactionType
   suggested_category: string | null
   category_id: number | null
+  is_recurring?: boolean
 }
 
 export interface AccountMapping {
@@ -215,6 +216,21 @@ export interface PreviewResponse {
   existing_accounts: { id: number; name: string; account_type: AccountType }[]
   transactions: Record<string, ImportedTransaction[]>
   duplicate_counts: Record<string, number>
+}
+
+export interface SheetMeta {
+  name: string
+  columns: string[]
+  sample_rows: string[][]
+}
+
+export interface ColumnHints {
+  sheet_name: string
+  date_col: number
+  description_col: number
+  amount_col?: number
+  debit_col?: number
+  credit_col?: number
 }
 
 export interface ConfirmPayload {

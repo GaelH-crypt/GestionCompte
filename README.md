@@ -66,6 +66,53 @@ Identifiants par défaut (définis dans `.env`) :
 
 > `DATABASE_URL` est assemblée automatiquement par Docker Compose — ne pas la définir manuellement.
 
+## Port personnalisé
+
+Par défaut, l'application est exposée sur le **port 80**. Voici comment changer ce port selon le mode d'utilisation.
+
+### Docker Compose (production / démo)
+
+Modifiez la ligne `ports` du service `nginx` dans `docker-compose.yml` (ou `docker-compose.prod.yml`) :
+
+```yaml
+nginx:
+  ports:
+    - "8080:80"   # Remplacer 8080 par le port souhaité
+```
+
+Mettez ensuite à jour les variables d'environnement dans votre fichier `.env` pour refléter le nouveau port :
+
+```dotenv
+ALLOWED_HOSTS=localhost,127.0.0.1,mon-serveur.example.com
+CORS_ALLOWED_ORIGINS=http://localhost:8080,http://mon-serveur.example.com:8080
+```
+
+Relancez ensuite la stack :
+
+```bash
+docker compose up -d
+```
+
+L'application sera accessible sur **http://localhost:8080** (ou le port choisi).
+
+### Développement local (sans Docker)
+
+**Backend Django** — passez le port en argument de `runserver` :
+
+```bash
+cd backend
+DJANGO_SETTINGS_MODULE=config.settings.development python manage.py runserver 0.0.0.0:9000
+```
+
+**Frontend Vite** — utilisez le flag `--port` :
+
+```bash
+cd frontend
+npm run dev -- --port 3000
+```
+
+> **Note** : si vous changez le port du backend, mettez à jour le proxy Vite dans `frontend/vite.config.ts` (clé `server.proxy`) pour pointer vers le nouveau port.
+
 ## Sauvegarde et restauration
 
 ### Sauvegarder la base de données

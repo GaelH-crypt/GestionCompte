@@ -6,8 +6,14 @@ class ParseError(Exception):
     pass
 
 
+class ColumnMappingRequired(Exception):
+    def __init__(self, sheets: list[dict]):
+        self.sheets = sheets
+
+
+# ── Crédit Mutuel strategy ──────────────────────────────────────────────────
+
 def _rib_from_sheet_name(sheet_name: str) -> str:
-    """Extrait le numéro de compte depuis le nom de feuille 'Cpt 02625 00022060507'."""
     parts = sheet_name.split(' ', 1)
     if len(parts) == 2:
         return parts[1].strip()
@@ -46,13 +52,11 @@ def _parse_accounts_sheet(xl: pd.ExcelFile) -> list[dict]:
 
 
 def _parse_account_sheet(xl: pd.ExcelFile, sheet_name: str) -> tuple[str, list[dict]]:
-    # Read raw to extract full RIB from row 0
     raw = xl.parse(sheet_name, header=None)
-    rib = _rib_from_sheet_name(sheet_name)  # fallback
+    rib = _rib_from_sheet_name(sheet_name)
     if not raw.empty:
         cell = str(raw.iloc[0, 0])
         if 'R.I.B.' in cell or 'R.I.B' in cell:
-            # Format: "R.I.B. : 10278 02625 00022060507"
             parts = cell.split(':')
             if len(parts) >= 2:
                 rib = parts[-1].strip()
@@ -67,7 +71,6 @@ def _parse_account_sheet(xl: pd.ExcelFile, sheet_name: str) -> tuple[str, list[d
         if col not in df.columns:
             df[col] = None
 
-    # Filtrer les lignes sans date valide ou avec libellé de pied de page
     df = df[pd.to_datetime(df['date'], errors='coerce').notna()]
     skip_patterns = ['Solde au', 'Solde initial', 'Liste de vos comptes']
     for pat in skip_patterns:
@@ -78,22 +81,16 @@ def _parse_account_sheet(xl: pd.ExcelFile, sheet_name: str) -> tuple[str, list[d
         desc = str(row['description']).strip()
         if not desc or desc == 'nan':
             continue
-
         debit = float(row['debit']) if pd.notna(row['debit']) else None
         credit = float(row['credit']) if pd.notna(row['credit']) else None
-
         if debit is not None and debit < 0:
-            tx_type = 'expense'
-            amount = abs(debit)
+            tx_type, amount = 'expense', abs(debit)
         elif debit is not None and debit > 0:
-            tx_type = 'expense'
-            amount = debit
+            tx_type, amount = 'expense', debit
         elif credit is not None:
-            tx_type = 'income'
-            amount = abs(credit)
+            tx_type, amount = 'income', abs(credit)
         else:
             continue
-
         date_str = pd.to_datetime(row['date']).strftime('%Y-%m-%d')
         transactions.append({
             'date': date_str,
@@ -104,27 +101,220 @@ def _parse_account_sheet(xl: pd.ExcelFile, sheet_name: str) -> tuple[str, list[d
     return rib, transactions
 
 
-def parse_excel(file) -> dict:
-    """
-    Parse un fichier Excel Crédit Mutuel.
-    Retourne {'accounts': [...], 'transactions': {rib: [...]}}
-    """
-    if isinstance(file, (str, bytes)):
-        buf = io.BytesIO(file) if isinstance(file, bytes) else file
+def _parse_credit_mutuel(xl: pd.ExcelFile) -> dict:
+    accounts = _parse_accounts_sheet(xl)
+    transactions: dict = {}
+    for sheet in xl.sheet_names:
+        if sheet.startswith('Cpt '):
+            rib, txs = _parse_account_sheet(xl, sheet)
+            transactions.setdefault(rib, []).extend(txs)
+    return {'accounts': accounts, 'transactions': transactions}
+
+
+# ── Generic strategy ────────────────────────────────────────────────────────
+
+_COLUMN_KEYWORDS: dict[str, list[str]] = {
+    'date': ['date', 'datum'],
+    'description': [
+        'libellé', 'libelle', 'label', 'description',
+        'opération', 'operation', 'motif',
+        'référence', 'reference', 'intitulé', 'intitule',
+    ],
+    'debit': ['débit', 'debit', 'sortie', 'retrait'],
+    'credit': ['crédit', 'credit', 'entrée', 'entree', 'versement'],
+    'amount': ['montant', 'amount'],
+}
+
+
+def _to_float(v) -> float | None:
+    if not pd.notna(v):
+        return None
+    try:
+        return float(v)
+    except (ValueError, TypeError):
+        try:
+            s = str(v).replace('\xa0', '').replace(' ', '')
+            if ',' in s and '.' in s:
+                if s.index(',') < s.index('.'):
+                    s = s.replace(',', '')        # "1,234.56" → "1234.56"
+                else:
+                    s = s.replace('.', '').replace(',', '.')  # "1.234,56" → "1234.56"
+            else:
+                s = s.replace(',', '.')           # "1234,56" → "1234.56"
+            return float(s)
+        except (ValueError, TypeError):
+            return None
+
+
+def _score_row(row: list) -> int:
+    found: set[str] = set()
+    for cell in row:
+        cell_str = str(cell).lower().strip() if (cell is not None and pd.notna(cell)) else ''
+        for col_type, keywords in _COLUMN_KEYWORDS.items():
+            if any(kw in cell_str for kw in keywords):
+                found.add(col_type)
+    return len(found)
+
+
+def _detect_header_row(raw: pd.DataFrame) -> int | None:
+    best_score = 1  # minimum threshold — must beat 1 to be considered a header
+    best_idx = None
+    for i in range(min(15, len(raw))):
+        score = _score_row(raw.iloc[i].tolist())
+        if score > best_score:
+            best_score = score
+            best_idx = i
+    return best_idx
+
+
+def _map_columns_generic(headers: list) -> dict:
+    col_map: dict = {}
+    for i, col in enumerate(headers):
+        col_lower = str(col).lower().strip() if col else ''
+        if not col_lower or col_lower == 'nan':
+            continue
+        if 'date_col' not in col_map and any(kw in col_lower for kw in _COLUMN_KEYWORDS['date']):
+            col_map['date_col'] = i
+        elif 'description_col' not in col_map and any(kw in col_lower for kw in _COLUMN_KEYWORDS['description']):
+            col_map['description_col'] = i
+        elif 'debit_col' not in col_map and any(kw in col_lower for kw in _COLUMN_KEYWORDS['debit']):
+            col_map['debit_col'] = i
+        elif 'credit_col' not in col_map and any(kw in col_lower for kw in _COLUMN_KEYWORDS['credit']):
+            col_map['credit_col'] = i
+        elif 'amount_col' not in col_map and any(kw in col_lower for kw in _COLUMN_KEYWORDS['amount']):
+            col_map['amount_col'] = i
+    return col_map
+
+
+def _is_confident(col_map: dict) -> bool:
+    has_date = 'date_col' in col_map
+    has_amount = 'amount_col' in col_map or 'debit_col' in col_map or 'credit_col' in col_map
+    return has_date and has_amount
+
+
+def _parse_generic_sheet(xl: pd.ExcelFile, sheet_name: str, col_map: dict) -> list[dict]:
+    raw = xl.parse(sheet_name, header=None)
+    transactions = []
+    for _, row in raw.iterrows():
+        row_list = row.tolist()
+
+        date_idx = col_map.get('date_col')
+        date_val = row_list[date_idx] if date_idx is not None and date_idx < len(row_list) else None
+        parsed_date = pd.to_datetime(date_val, errors='coerce')
+        if pd.isna(parsed_date):
+            continue
+
+        desc_idx = col_map.get('description_col')
+        desc = str(row_list[desc_idx]).strip() if desc_idx is not None and desc_idx < len(row_list) else ''
+        if not desc or desc == 'nan':
+            continue
+
+        amount_val = debit = credit = None
+        amt_idx = col_map.get('amount_col')
+        if amt_idx is not None and amt_idx < len(row_list):
+            v = row_list[amt_idx]
+            amount_val = _to_float(v)
+        else:
+            deb_idx = col_map.get('debit_col')
+            cre_idx = col_map.get('credit_col')
+            if deb_idx is not None and deb_idx < len(row_list):
+                v = row_list[deb_idx]
+                debit = _to_float(v)
+            if cre_idx is not None and cre_idx < len(row_list):
+                v = row_list[cre_idx]
+                credit = _to_float(v)
+
+        if amount_val is not None:
+            if amount_val < 0:
+                tx_type, tx_amount = 'expense', abs(amount_val)
+            elif amount_val > 0:
+                tx_type, tx_amount = 'income', amount_val
+            else:
+                continue
+        elif debit is not None and debit != 0:
+            tx_type, tx_amount = 'expense', abs(debit)
+        elif credit is not None and credit != 0:
+            tx_type, tx_amount = 'income', abs(credit)
+        else:
+            continue
+
+        transactions.append({
+            'date': parsed_date.strftime('%Y-%m-%d'),
+            'description': desc,
+            'amount': round(tx_amount, 2),
+            'transaction_type': tx_type,
+        })
+    return transactions
+
+
+def _parse_generic_excel(xl: pd.ExcelFile, column_hints: dict | None = None) -> dict:
+    accounts: list[dict] = []
+    transactions: dict = {}
+    hints_matched_sheet = False
+
+    for sheet_name in xl.sheet_names:
+        raw = xl.parse(sheet_name, header=None)
+        if raw.empty or len(raw) < 2:
+            continue
+
+        hints_apply = column_hints is not None and (
+            column_hints.get('sheet_name') == sheet_name
+            or column_hints.get('sheet_name') is None
+        )
+
+        if hints_apply:
+            hints_matched_sheet = True
+            col_map = {k: v for k, v in column_hints.items() if k.endswith('_col') and v is not None}
+        else:
+            header_idx = _detect_header_row(raw)
+            if header_idx is None:
+                continue
+            headers = [str(c) if pd.notna(c) else '' for c in raw.iloc[header_idx].tolist()]
+            col_map = _map_columns_generic(headers)
+            if not _is_confident(col_map):
+                continue
+
+        txs = _parse_generic_sheet(xl, sheet_name, col_map)
+        if txs:
+            accounts.append({'name': sheet_name, 'rib': sheet_name, 'balance': 0.0})
+            transactions[sheet_name] = txs
+
+    if not accounts:
+        if column_hints is not None and hints_matched_sheet:
+            # Hints matched a sheet but produced 0 valid transactions — return empty rather than asking again
+            return {'accounts': [], 'transactions': {}}
+        # Either no hints or hints didn't match any sheet — ask for manual mapping
+        sheets_meta = []
+        for sheet_name in xl.sheet_names:
+            raw = xl.parse(sheet_name, header=None)
+            if raw.empty or len(raw) < 2:
+                continue
+            header_idx = _detect_header_row(raw) or 0
+            columns = [str(c) if pd.notna(c) else '' for c in raw.iloc[header_idx].tolist()]
+            sample_rows = [
+                [str(v) if pd.notna(v) else '' for v in raw.iloc[i].tolist()]
+                for i in range(header_idx + 1, min(header_idx + 6, len(raw)))
+            ]
+            sheets_meta.append({'name': sheet_name, 'columns': columns, 'sample_rows': sample_rows})
+        raise ColumnMappingRequired(sheets_meta)
+
+    return {'accounts': accounts, 'transactions': transactions}
+
+
+# ── Entry point ─────────────────────────────────────────────────────────────
+
+def parse_excel(file, column_hints: dict | None = None) -> dict:
+    if isinstance(file, bytes):
+        buf = io.BytesIO(file)
     else:
         buf = file
 
     xl = pd.ExcelFile(buf, engine='openpyxl')
 
-    accounts = _parse_accounts_sheet(xl)
-    transactions = {}
+    if 'Vos comptes' in xl.sheet_names and any(s.startswith('Cpt ') for s in xl.sheet_names):
+        try:
+            return _parse_credit_mutuel(xl)
+        except ParseError:
+            pass
 
-    for sheet in xl.sheet_names:
-        if sheet.startswith('Cpt '):
-            rib, txs = _parse_account_sheet(xl, sheet)
-            if rib in transactions:
-                transactions[rib].extend(txs)
-            else:
-                transactions[rib] = txs
-
-    return {'accounts': accounts, 'transactions': transactions}
+    return _parse_generic_excel(xl, column_hints)

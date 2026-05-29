@@ -1,12 +1,13 @@
 from decimal import Decimal
 import datetime
+import json
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 
-from apps.imports.services.parser import parse_excel, ParseError
+from apps.imports.services.parser import parse_excel, ParseError, ColumnMappingRequired
 from apps.imports.services.categorizer import suggest_category
 from apps.imports.services.deduplicator import filter_duplicates
 from apps.accounts.models import Account
@@ -22,8 +23,21 @@ class PreviewView(APIView):
         if not file:
             return Response({'error': 'Aucun fichier fourni.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        column_hints = None
+        raw_hints = request.data.get('column_hints')
+        if raw_hints:
+            try:
+                column_hints = json.loads(raw_hints)
+            except (json.JSONDecodeError, TypeError):
+                pass
+
         try:
-            parsed = parse_excel(file)
+            parsed = parse_excel(file, column_hints)
+        except ColumnMappingRequired as e:
+            return Response(
+                {'error': 'column_mapping_required', 'sheets': e.sheets},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
         except ParseError as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception:
@@ -135,6 +149,7 @@ class ConfirmView(APIView):
                     description=tx['description'],
                     date=tx['date'],
                     category=category,
+                    is_recurring=bool(tx.get('is_recurring', False)),
                     note='',
                     tags=[],
                 )
