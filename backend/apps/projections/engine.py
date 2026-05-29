@@ -77,7 +77,6 @@ def build_engine_from_user(user, overrides: dict = None) -> ProjectionEngine:
         for freq, multiplier in freq_multipliers.items():
             agg = RecurringTransaction.objects.filter(
                 user=user, is_active=True, transaction_type=transaction_type, frequency=freq,
-                credit__isnull=True,  # credit payments counted separately via monthly_credits
             ).aggregate(t=Sum('amount'))['t']
             if agg:
                 total += agg * multiplier
@@ -91,9 +90,7 @@ def build_engine_from_user(user, overrides: dict = None) -> ProjectionEngine:
     today = date.today()
     end_date = today + relativedelta(months=_MAX_HORIZON_MONTHS)
     yearly_events = []
-    for rt in RecurringTransaction.objects.filter(
-        user=user, is_active=True, frequency='yearly', credit__isnull=True
-    ):
+    for rt in RecurringTransaction.objects.filter(user=user, is_active=True, frequency='yearly'):
         occ = rt.next_occurrence
         while occ <= end_date:
             yearly_events.append({
@@ -104,7 +101,18 @@ def build_engine_from_user(user, overrides: dict = None) -> ProjectionEngine:
             })
             occ = occ + relativedelta(years=1)
 
-    credit_agg = Credit.objects.filter(user=user, is_active=True).aggregate(
+    # Only count credits that have NO linked active recurring transaction.
+    # Credits that do have one are already represented in monthly_expenses above.
+    covered_credit_ids = list(
+        RecurringTransaction.objects.filter(
+            user=user, is_active=True, credit__isnull=False
+        ).values_list('credit_id', flat=True).distinct()
+    )
+    credit_agg = Credit.objects.filter(
+        user=user, is_active=True
+    ).exclude(
+        id__in=covered_credit_ids
+    ).aggregate(
         p=Sum('monthly_payment'), ins=Sum('insurance_monthly')
     )
     monthly_credits = (credit_agg['p'] or Decimal('0')) + (credit_agg['ins'] or Decimal('0'))

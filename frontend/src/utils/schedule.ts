@@ -18,7 +18,6 @@ export type AnyEntry = ScheduleEntry | CreditEntry
 
 /**
  * Expands recurring transaction templates into individual occurrences.
- * Skips recurring transactions linked to a credit (shown via expandCreditOccurrences).
  */
 export function expandOccurrences(
   items: RecurringTransaction[],
@@ -33,7 +32,6 @@ export function expandOccurrences(
 
   for (const item of items) {
     if (!item.is_active) continue
-    if (item.credit !== null) continue // shown via credit entry
 
     let current = startOfDay(new Date(item.next_occurrence))
     if (isNaN(current.getTime())) continue
