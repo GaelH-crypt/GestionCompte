@@ -7,6 +7,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import TokenError
 
 from .serializers import CustomTokenObtainPairSerializer, UserSerializer, ChangePasswordSerializer
 
@@ -28,8 +29,11 @@ def logout_view(request):
         if refresh_token:
             token = RefreshToken(refresh_token)
             token.blacklist()
-    except Exception:
+    except TokenError:
+        # Token already blacklisted (e.g. rotated) or expired — session is already invalid.
         pass
+    except Exception:
+        return Response({'detail': 'Erreur lors de la déconnexion.'}, status=status.HTTP_400_BAD_REQUEST)
     return Response({'detail': 'Déconnexion réussie.'}, status=status.HTTP_200_OK)
 
 

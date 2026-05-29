@@ -139,6 +139,11 @@ SIMPLE_JWT = {
 CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost').split(',')
 CORS_ALLOW_CREDENTIALS = True
 
+# django-ratelimit: number of trusted reverse proxies in front of Django.
+# With 1 proxy (Nginx), get_ip() reads the real client IP from X-Forwarded-For
+# instead of REMOTE_ADDR (which would be the Nginx container IP).
+NUM_PROXIES = config('NUM_PROXIES', default=1, cast=int)
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,

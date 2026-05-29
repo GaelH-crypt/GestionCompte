@@ -20,6 +20,15 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   backend:
     build:
       context: ./backend
@@ -34,6 +43,7 @@ services:
       DEBUG: ${DEBUG:-False}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       # Admin account created on first boot by create_admin command
       DJANGO_SUPERUSER_USERNAME: ${DJANGO_SUPERUSER_USERNAME:-admin}
       DJANGO_SUPERUSER_EMAIL: ${DJANGO_SUPERUSER_EMAIL:-admin@gestioncompte.local}
@@ -43,6 +53,8 @@ services:
       - backend_media:/app/media
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     command: >
       sh -c "python manage.py migrate --noinput &&
