@@ -12,6 +12,7 @@ const TransactionsPage = lazy(() => import('@/pages/TransactionsPage'))
 const CategoriesPage = lazy(() => import('@/pages/CategoriesPage'))
 const CreditsPage = lazy(() => import('@/pages/CreditsPage'))
 const RecurringPage = lazy(() => import('@/pages/RecurringPage'))
+const SchedulePage = lazy(() => import('@/pages/SchedulePage'))
 const ProjectionsPage = lazy(() => import('@/pages/ProjectionsPage'))
 const SimulationsPage = lazy(() => import('@/pages/SimulationsPage'))
 
@@ -79,6 +80,14 @@ export default function App() {
             element={
               <Suspense fallback={<PageSpinner />}>
                 <RecurringPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="schedule"
+            element={
+              <Suspense fallback={<PageSpinner />}>
+                <SchedulePage />
               </Suspense>
             }
           />
