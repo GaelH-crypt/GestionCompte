@@ -106,18 +106,28 @@ def _parse_account_sheet(xl: pd.ExcelFile, sheet_name: str) -> tuple[str, list[d
     return rib, transactions
 
 
+def _match_rib(short: str, full: str) -> bool:
+    """True if short RIB is a substring of full RIB (handles IBAN vs short format)."""
+    n_short = _norm_rib(short)
+    n_full = _norm_rib(full)
+    return n_short == n_full or n_short in n_full or n_full in n_short
+
+
 def _parse_credit_mutuel(xl: pd.ExcelFile) -> dict:
     accounts = _parse_accounts_sheet(xl)
-    # Map normalised RIB → canonical RIB from the accounts sheet so that
-    # transaction-sheet RIBs (which may differ in spacing/case) use the
-    # same key as the account they belong to.
-    norm_to_canonical = {_norm_rib(a['rib']): a['rib'] for a in accounts}
+    # Transaction-sheet RIBs use a short format (bank+account, e.g. "02625 00023120602")
+    # while "Vos comptes" RIBs use the full IBAN (e.g. "FR76026250002312060200").
+    # Resolve each transaction-sheet RIB to the canonical account RIB via substring match.
+    acc_ribs = [a['rib'] for a in accounts]
 
     transactions: dict = {}
     for sheet in xl.sheet_names:
         if sheet.startswith('Cpt '):
             raw_rib, txs = _parse_account_sheet(xl, sheet)
-            canonical_rib = norm_to_canonical.get(_norm_rib(raw_rib), raw_rib)
+            canonical_rib = next(
+                (r for r in acc_ribs if _match_rib(raw_rib, r)),
+                raw_rib,
+            )
             transactions.setdefault(canonical_rib, []).extend(txs)
     return {'accounts': accounts, 'transactions': transactions}
 
