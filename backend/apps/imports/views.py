@@ -114,15 +114,22 @@ class ConfirmView(APIView):
         categories_by_id = {c.id: c for c in Category.objects.filter(user=request.user)}
 
         skipped_ribs = []
-        # Normalised fallback in case RIB formatting differs between
-        # the accounts sheet and the transaction sheets (spaces, case).
+
         def _norm(r: str) -> str:
             return r.replace(' ', '').upper()
 
-        normalized_mapping = {_norm(k): v for k, v in mapping.items()}
+        def _find_config(rib: str) -> dict:
+            if rib in mapping:
+                return mapping[rib]
+            norm_rib = _norm(rib)
+            for k, v in mapping.items():
+                norm_k = _norm(k)
+                if norm_rib == norm_k or norm_rib in norm_k or norm_k in norm_rib:
+                    return v
+            return {}
 
         for rib, txs in transactions_payload.items():
-            account_config = mapping.get(rib) or normalized_mapping.get(_norm(rib), {})
+            account_config = _find_config(rib)
             account_id = account_config.get('id')
             if not account_id:
                 skipped_ribs.append(rib)
