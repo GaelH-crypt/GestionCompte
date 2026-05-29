@@ -198,7 +198,7 @@ export default function TransactionsPage() {
       <ImportWizard
         open={showImport}
         onOpenChange={setShowImport}
-        categories={categoriesData?.results ?? []}
+        categories={categoriesData ?? []}
       />
     </div>
   )
@@ -309,7 +309,7 @@ function TransactionFormModal({
               className={sel}
             >
               <option value="">Choisir un compte</option>
-              {(accounts ?? []).map((a) => (
+              {(Array.isArray(accounts) ? accounts : []).map((a) => (
                 <option key={a.id} value={a.id}>{a.name}</option>
               ))}
             </select>
@@ -322,7 +322,7 @@ function TransactionFormModal({
               className={sel}
             >
               <option value="">Sans catégorie</option>
-              {(categories ?? []).map((c) => (
+              {(Array.isArray(categories) ? categories : []).map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
