@@ -217,6 +217,21 @@ export interface PreviewResponse {
   duplicate_counts: Record<string, number>
 }
 
+export interface SheetMeta {
+  name: string
+  columns: string[]
+  sample_rows: string[][]
+}
+
+export interface ColumnHints {
+  sheet_name: string
+  date_col: number
+  description_col: number
+  amount_col?: number
+  debit_col?: number
+  credit_col?: number
+}
+
 export interface ConfirmPayload {
   mapping: Record<string, AccountMapping>
   transactions: Record<string, ImportedTransaction[]>
