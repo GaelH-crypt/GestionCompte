@@ -200,6 +200,7 @@ export interface ImportedTransaction {
   transaction_type: TransactionType
   suggested_category: string | null
   category_id: number | null
+  is_recurring?: boolean
 }
 
 export interface AccountMapping {
