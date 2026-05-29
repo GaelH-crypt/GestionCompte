@@ -76,7 +76,8 @@ def build_engine_from_user(user, overrides: dict = None) -> ProjectionEngine:
         total = Decimal('0')
         for freq, multiplier in freq_multipliers.items():
             agg = RecurringTransaction.objects.filter(
-                user=user, is_active=True, transaction_type=transaction_type, frequency=freq
+                user=user, is_active=True, transaction_type=transaction_type, frequency=freq,
+                credit__isnull=True,  # credit payments counted separately via monthly_credits
             ).aggregate(t=Sum('amount'))['t']
             if agg:
                 total += agg * multiplier
@@ -90,7 +91,9 @@ def build_engine_from_user(user, overrides: dict = None) -> ProjectionEngine:
     today = date.today()
     end_date = today + relativedelta(months=_MAX_HORIZON_MONTHS)
     yearly_events = []
-    for rt in RecurringTransaction.objects.filter(user=user, is_active=True, frequency='yearly'):
+    for rt in RecurringTransaction.objects.filter(
+        user=user, is_active=True, frequency='yearly', credit__isnull=True
+    ):
         occ = rt.next_occurrence
         while occ <= end_date:
             yearly_events.append({

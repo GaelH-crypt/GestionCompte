@@ -3,10 +3,11 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { CalendarDays } from 'lucide-react'
 import { recurringApi } from '@/api/recurring'
+import { creditsApi } from '@/api/credits'
 import { Card } from '@/components/ui/Card'
 import { PageSpinner } from '@/components/ui/Spinner'
-import { expandOccurrences, type ScheduleEntry } from '@/utils/schedule'
-import type { Frequency } from '@/types'
+import { expandOccurrences, expandCreditOccurrences, type AnyEntry } from '@/utils/schedule'
+import type { Frequency, CreditType } from '@/types'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 
@@ -14,30 +15,50 @@ const formatEur = (n: number | string) =>
   new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(parseFloat(String(n)))
 
 const FREQ_LABELS: Record<Frequency, string> = { weekly: 'Hebdo', monthly: 'Mensuel', yearly: 'Annuel' }
+const CREDIT_TYPE_LABELS: Record<CreditType, string> = {
+  mortgage: 'Immobilier',
+  auto: 'Auto',
+  consumer: 'Consommation',
+  other: 'Autre',
+}
 
 export default function SchedulePage() {
   const [months, setMonths] = useState(3)
 
-  const { data, isLoading } = useQuery({
+  const { data: recurringData, isLoading: recurringLoading } = useQuery({
     queryKey: ['recurring'],
     queryFn: () => recurringApi.list().then((r) => r.data.results),
   })
 
-  if (isLoading) return <PageSpinner />
+  const { data: creditsData, isLoading: creditsLoading } = useQuery({
+    queryKey: ['credits'],
+    queryFn: () => creditsApi.list().then((r) => r.data.results),
+  })
 
-  const items = data ?? []
-  const entries = expandOccurrences(items, months)
+  if (recurringLoading || creditsLoading) return <PageSpinner />
 
-  // Summary totals over the whole window
-  const totalExpenses = entries
-    .filter((e) => e.recurring.transaction_type === 'expense')
-    .reduce((s, e) => s + parseFloat(e.recurring.amount), 0)
-  const totalIncomes = entries
-    .filter((e) => e.recurring.transaction_type === 'income')
-    .reduce((s, e) => s + parseFloat(e.recurring.amount), 0)
+  const recurring = recurringData ?? []
+  const credits = creditsData ?? []
 
-  // Group entries by month label
-  const grouped = groupByMonth(entries)
+  const recurringEntries = expandOccurrences(recurring, months)
+  const creditEntries = expandCreditOccurrences(credits, months)
+
+  const allEntries: AnyEntry[] = [...recurringEntries, ...creditEntries].sort(
+    (a, b) => a.date.getTime() - b.date.getTime()
+  )
+
+  const totalExpenses = allEntries
+    .filter((e) =>
+      (e.kind === 'recurring' && e.recurring.transaction_type === 'expense') ||
+      e.kind === 'credit'
+    )
+    .reduce((s, e) => s + (e.kind === 'recurring' ? parseFloat(e.recurring.amount) : e.credit.total_monthly_charge), 0)
+
+  const totalIncomes = allEntries
+    .filter((e) => e.kind === 'recurring' && e.recurring.transaction_type === 'income')
+    .reduce((s, e) => s + (e.kind === 'recurring' ? parseFloat(e.recurring.amount) : 0), 0)
+
+  const grouped = groupByMonth(allEntries)
 
   return (
     <div className="space-y-6">
@@ -70,7 +91,7 @@ export default function SchedulePage() {
         <Card>
           <p className="text-sm text-gray-400">Dépenses récurrentes</p>
           <p className="text-2xl font-bold text-red-400 mt-1">-{formatEur(totalExpenses)}</p>
-          <p className="text-xs text-gray-500 mt-1">sur {months} mois</p>
+          <p className="text-xs text-gray-500 mt-1">sur {months} mois (dont crédits)</p>
         </Card>
         <Card>
           <p className="text-sm text-gray-400">Solde net</p>
@@ -96,12 +117,20 @@ export default function SchedulePage() {
         </Card>
       ) : (
         grouped.map(({ label, entries: monthEntries }) => {
-          const monthExpenses = monthEntries
-            .filter((e) => e.recurring.transaction_type === 'expense')
-            .reduce((s, e) => s + parseFloat(e.recurring.amount), 0)
+          const monthExpenses =
+            monthEntries
+              .filter((e) =>
+                (e.kind === 'recurring' && e.recurring.transaction_type === 'expense') ||
+                e.kind === 'credit'
+              )
+              .reduce(
+                (s, e) =>
+                  s + (e.kind === 'recurring' ? parseFloat(e.recurring.amount) : e.credit.total_monthly_charge),
+                0
+              )
           const monthIncomes = monthEntries
-            .filter((e) => e.recurring.transaction_type === 'income')
-            .reduce((s, e) => s + parseFloat(e.recurring.amount), 0)
+            .filter((e) => e.kind === 'recurring' && e.recurring.transaction_type === 'income')
+            .reduce((s, e) => s + (e.kind === 'recurring' ? parseFloat(e.recurring.amount) : 0), 0)
 
           return (
             <Card key={label} padding={false}>
@@ -121,39 +150,7 @@ export default function SchedulePage() {
               {/* Entries */}
               <div className="divide-y divide-gray-800/50">
                 {monthEntries.map((entry) => (
-                  <div
-                    key={`${entry.recurring.id}-${entry.date.toISOString()}`}
-                    className="flex items-center gap-4 px-6 py-3 hover:bg-gray-800/20 transition-colors"
-                  >
-                    {/* Date chip */}
-                    <div className="w-10 text-center flex-shrink-0">
-                      <span className="text-xs text-gray-500">
-                        {format(entry.date, 'd', { locale: fr })}
-                      </span>
-                    </div>
-
-                    {/* Name + account */}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-gray-200 font-medium truncate">
-                        {entry.recurring.name}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {entry.recurring.account_name} · {FREQ_LABELS[entry.recurring.frequency]}
-                      </p>
-                    </div>
-
-                    {/* Amount */}
-                    <span
-                      className={`text-sm font-semibold whitespace-nowrap ${
-                        entry.recurring.transaction_type === 'income'
-                          ? 'text-green-400'
-                          : 'text-red-400'
-                      }`}
-                    >
-                      {entry.recurring.transaction_type === 'income' ? '+' : '-'}
-                      {formatEur(entry.recurring.amount)}
-                    </span>
-                  </div>
+                  <EntryRow key={entryKey(entry)} entry={entry} />
                 ))}
               </div>
             </Card>
@@ -164,12 +161,61 @@ export default function SchedulePage() {
   )
 }
 
-interface MonthGroup {
-  label: string
-  entries: ScheduleEntry[]
+function entryKey(entry: AnyEntry): string {
+  if (entry.kind === 'recurring') return `r-${entry.recurring.id}-${entry.date.toISOString()}`
+  return `c-${entry.credit.id}-${entry.date.toISOString()}`
 }
 
-function groupByMonth(entries: ScheduleEntry[]): MonthGroup[] {
+function EntryRow({ entry }: { entry: AnyEntry }) {
+  if (entry.kind === 'credit') {
+    return (
+      <div className="flex items-center gap-4 px-6 py-3 hover:bg-gray-800/20 transition-colors">
+        <div className="w-10 text-center flex-shrink-0">
+          <span className="text-xs text-gray-500">{format(entry.date, 'd', { locale: fr })}</span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm text-gray-200 font-medium truncate">{entry.credit.name}</p>
+          <p className="text-xs text-gray-500">
+            {CREDIT_TYPE_LABELS[entry.credit.credit_type]} · Mensuel
+          </p>
+        </div>
+        <span className="text-sm font-semibold whitespace-nowrap text-orange-400">
+          -{formatEur(entry.credit.total_monthly_charge)}
+        </span>
+      </div>
+    )
+  }
+
+  const r = entry.recurring
+  return (
+    <div className="flex items-center gap-4 px-6 py-3 hover:bg-gray-800/20 transition-colors">
+      <div className="w-10 text-center flex-shrink-0">
+        <span className="text-xs text-gray-500">{format(entry.date, 'd', { locale: fr })}</span>
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm text-gray-200 font-medium truncate">{r.name}</p>
+        <p className="text-xs text-gray-500">
+          {r.account_name} · {FREQ_LABELS[r.frequency]}
+        </p>
+      </div>
+      <span
+        className={`text-sm font-semibold whitespace-nowrap ${
+          r.transaction_type === 'income' ? 'text-green-400' : 'text-red-400'
+        }`}
+      >
+        {r.transaction_type === 'income' ? '+' : '-'}
+        {formatEur(r.amount)}
+      </span>
+    </div>
+  )
+}
+
+interface MonthGroup {
+  label: string
+  entries: AnyEntry[]
+}
+
+function groupByMonth(entries: AnyEntry[]): MonthGroup[] {
   const groups: MonthGroup[] = []
   for (const entry of entries) {
     const label = format(entry.date, 'MMMM yyyy', { locale: fr })
