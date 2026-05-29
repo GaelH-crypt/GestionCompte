@@ -23,6 +23,13 @@ class RecurringTransaction(models.Model):
     next_occurrence = models.DateField()
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True)
     account = models.ForeignKey(Account, on_delete=models.CASCADE)
+    credit = models.ForeignKey(
+        'credits.Credit',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='recurring_transactions',
+    )
     is_active = models.BooleanField(default=True)
     note = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
