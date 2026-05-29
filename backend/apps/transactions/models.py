@@ -24,11 +24,19 @@ class Transaction(models.Model):
     transfer_to_account = models.ForeignKey(
         Account, on_delete=models.SET_NULL, null=True, blank=True, related_name='incoming_transfers'
     )
+    external_id = models.CharField(max_length=100, null=True, blank=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['-date', '-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                condition=models.Q(external_id__isnull=False),
+                fields=['account', 'external_id'],
+                name='unique_transaction_external_id_per_account',
+            )
+        ]
 
     def __str__(self):
         return f"{self.description} ({self.amount})"

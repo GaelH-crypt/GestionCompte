@@ -12,4 +12,5 @@ urlpatterns = [
     path('api/dashboard/', include('apps.dashboard.urls')),
     path('api/projections/', include('apps.projections.urls')),
     path('api/import/', include('apps.imports.urls')),
+    path('api/bank-sync/', include('apps.bank_sync.urls')),
 ]

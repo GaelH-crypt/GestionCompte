@@ -245,3 +245,56 @@ export interface ConfirmResponse {
   created_transactions: number
   skipped_ribs?: string[]
 }
+
+// ─── Bank Sync (GoCardless) ─────────────────────────────────────────────────
+
+export interface BankInstitution {
+  id: string
+  name: string
+  bic: string
+  transaction_total_days: string
+  logo: string
+  countries: string[]
+}
+
+export type RequisitionStatus = 'CR' | 'LN' | 'EX' | 'RJ' | 'UA' | 'GA' | 'SA'
+
+export interface BankAccountLinked {
+  id: number
+  account_id: string
+  iban: string
+  name: string
+  currency: string
+  last_synced_at: string | null
+  linked_account: number | null
+  linked_account_name: string | null
+  requisition: number
+  requisition_institution: string
+  recent_sync_logs: SyncLogItem[]
+}
+
+export interface BankRequisitionItem {
+  id: number
+  requisition_id: string
+  institution_id: string
+  institution_name: string
+  institution_logo: string
+  status: RequisitionStatus
+  redirect_url: string
+  reference: string
+  created_at: string
+  bank_accounts: BankAccountLinked[]
+}
+
+export interface SyncLogItem {
+  id: number
+  synced_at: string
+  transactions_added: number
+  status: 'success' | 'error'
+  error_message: string
+}
+
+export interface CreateRequisitionResponse {
+  id: number
+  redirect_url: string
+}

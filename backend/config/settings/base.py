@@ -35,6 +35,7 @@ LOCAL_APPS = [
     'apps.projections',
     'apps.seed',
     'apps.imports',
+    'apps.bank_sync',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
