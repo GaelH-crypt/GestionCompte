@@ -9,4 +9,4 @@ class RecurringTransactionViewSet(viewsets.ModelViewSet):
     serializer_class = RecurringTransactionSerializer
 
     def get_queryset(self):
-        return RecurringTransaction.objects.filter(user=self.request.user).select_related('account', 'category')
+        return RecurringTransaction.objects.filter(user=self.request.user).select_related('account', 'category', 'credit')

@@ -20,3 +20,8 @@ class RecurringTransactionSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data['user'] = self.context['request'].user
         return super().create(validated_data)
+
+    def validate_credit(self, value):
+        if value is not None and value.user != self.context['request'].user:
+            raise serializers.ValidationError("Invalid credit.")
+        return value

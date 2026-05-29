@@ -65,3 +65,20 @@ class RecurringCreditLinkTest(TestCase):
         self.assertEqual(resp.status_code, 201)
         self.assertIsNone(resp.data['credit'])
         self.assertIsNone(resp.data['credit_name'])
+
+    def test_cannot_link_credit_belonging_to_another_user(self):
+        other_user = User.objects.create_user('other', password='pass')
+        other_credit = Credit.objects.create(
+            user=other_user, name='Other credit', credit_type='consumer',
+            initial_capital='10000', remaining_capital='8000',
+            interest_rate='5.0', monthly_payment='200', insurance_monthly='0',
+            duration_months=60, start_date=datetime.date(2023, 1, 1),
+            early_repayment_possible=False
+        )
+        resp = self.client.post('/api/recurring/', {
+            'name': 'Test', 'amount': '100.00',
+            'transaction_type': 'expense', 'frequency': 'monthly',
+            'next_occurrence': '2026-06-01', 'account': self.account.id,
+            'credit': other_credit.id,
+        })
+        self.assertEqual(resp.status_code, 400)
