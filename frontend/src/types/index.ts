@@ -73,6 +73,8 @@ export interface RecurringTransaction {
   category_name: string | null
   account: number
   account_name: string
+  credit: number | null
+  credit_name: string | null
   is_active: boolean
   note: string
   created_at: string
