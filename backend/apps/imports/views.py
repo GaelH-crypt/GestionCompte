@@ -113,17 +113,20 @@ class ConfirmView(APIView):
         # Pre-fetch user categories once to avoid N+1 on category lookup
         categories_by_id = {c.id: c for c in Category.objects.filter(user=request.user)}
 
+        skipped_ribs = []
+
         for rib, txs in transactions_payload.items():
             account_config = mapping.get(rib, {})
             account_id = account_config.get('id')
             if not account_id:
+                skipped_ribs.append(rib)
                 continue
 
             try:
                 account = Account.objects.get(id=account_id, user=request.user)
             except Account.DoesNotExist:
                 return Response(
-                    {'error': f'Compte {account_id} introuvable.'},
+                    {'error': f'Compte {account_id} introuvable ou inaccessible.'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
@@ -139,10 +142,13 @@ class ConfirmView(APIView):
                 existing_txs.add((date_str, Decimal(str(amount_val)).quantize(Decimal('0.01')), desc))
 
             for tx in txs:
-                amount = Decimal(str(tx['amount'])).quantize(Decimal('0.01'))
-                # tx['date'] is a string like '2026-05-01'
+                try:
+                    amount = Decimal(str(tx['amount'])).quantize(Decimal('0.01'))
+                except Exception:
+                    continue
                 date_str = str(tx['date'])
-                key = (date_str, amount, tx['description'][:255])
+                desc = tx['description'][:255]
+                key = (date_str, amount, desc)
                 if key in existing_txs:
                     continue
 
@@ -153,7 +159,7 @@ class ConfirmView(APIView):
                     account=account,
                     transaction_type=tx['transaction_type'],
                     amount=amount,
-                    description=tx['description'][:255],
+                    description=desc,
                     date=tx['date'],
                     category=category,
                     is_recurring=bool(tx.get('is_recurring', False)),
@@ -165,4 +171,5 @@ class ConfirmView(APIView):
         return Response({
             'created_accounts': created_accounts,
             'created_transactions': created_transactions,
+            'skipped_ribs': skipped_ribs,
         })
