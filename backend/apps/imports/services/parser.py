@@ -6,8 +6,12 @@ class ParseError(Exception):
     pass
 
 
+class ColumnMappingRequired(Exception):
+    def __init__(self, sheets: list[dict]):
+        self.sheets = sheets
+
+
 def _rib_from_sheet_name(sheet_name: str) -> str:
-    """Extrait le numéro de compte depuis le nom de feuille 'Cpt 02625 00022060507'."""
     parts = sheet_name.split(' ', 1)
     if len(parts) == 2:
         return parts[1].strip()
@@ -18,7 +22,7 @@ def _parse_accounts_sheet(xl: pd.ExcelFile) -> list[dict]:
     try:
         df = xl.parse('Vos comptes', header=1, usecols=range(4))
     except Exception as e:
-        raise ParseError("Sheet 'Vos comptes' not found. Is this a Crédit Mutuel export?") from e
+        raise ParseError("Sheet 'Vos comptes' not found.") from e
     df.columns = ['name', 'rib', 'balance', 'currency']
     df = df.dropna(subset=['name'])
     df = df[df['name'].astype(str).str.strip() != '']
@@ -32,13 +36,11 @@ def _parse_accounts_sheet(xl: pd.ExcelFile) -> list[dict]:
 
 
 def _parse_account_sheet(xl: pd.ExcelFile, sheet_name: str) -> tuple[str, list[dict]]:
-    # Read raw to extract full RIB from row 0
     raw = xl.parse(sheet_name, header=None)
-    rib = _rib_from_sheet_name(sheet_name)  # fallback
+    rib = _rib_from_sheet_name(sheet_name)
     if not raw.empty:
         cell = str(raw.iloc[0, 0])
         if 'R.I.B.' in cell or 'R.I.B' in cell:
-            # Format: "R.I.B. : 10278 02625 00022060507"
             parts = cell.split(':')
             if len(parts) >= 2:
                 rib = parts[-1].strip()
@@ -53,7 +55,6 @@ def _parse_account_sheet(xl: pd.ExcelFile, sheet_name: str) -> tuple[str, list[d
         if col not in df.columns:
             df[col] = None
 
-    # Filtrer les lignes sans date valide ou avec libellé de pied de page
     df = df[pd.to_datetime(df['date'], errors='coerce').notna()]
     skip_patterns = ['Solde au', 'Solde initial', 'Liste de vos comptes']
     for pat in skip_patterns:
@@ -64,22 +65,16 @@ def _parse_account_sheet(xl: pd.ExcelFile, sheet_name: str) -> tuple[str, list[d
         desc = str(row['description']).strip()
         if not desc or desc == 'nan':
             continue
-
         debit = float(row['debit']) if pd.notna(row['debit']) else None
         credit = float(row['credit']) if pd.notna(row['credit']) else None
-
         if debit is not None and debit < 0:
-            tx_type = 'expense'
-            amount = abs(debit)
+            tx_type, amount = 'expense', abs(debit)
         elif debit is not None and debit > 0:
-            tx_type = 'expense'
-            amount = debit
+            tx_type, amount = 'expense', debit
         elif credit is not None:
-            tx_type = 'income'
-            amount = abs(credit)
+            tx_type, amount = 'income', abs(credit)
         else:
             continue
-
         date_str = pd.to_datetime(row['date']).strftime('%Y-%m-%d')
         transactions.append({
             'date': date_str,
@@ -90,27 +85,28 @@ def _parse_account_sheet(xl: pd.ExcelFile, sheet_name: str) -> tuple[str, list[d
     return rib, transactions
 
 
-def parse_excel(file) -> dict:
-    """
-    Parse un fichier Excel Crédit Mutuel.
-    Retourne {'accounts': [...], 'transactions': {rib: [...]}}
-    """
-    if isinstance(file, (str, bytes)):
-        buf = io.BytesIO(file) if isinstance(file, bytes) else file
+def _parse_credit_mutuel(xl: pd.ExcelFile) -> dict:
+    accounts = _parse_accounts_sheet(xl)
+    transactions: dict = {}
+    for sheet in xl.sheet_names:
+        if sheet.startswith('Cpt '):
+            rib, txs = _parse_account_sheet(xl, sheet)
+            transactions.setdefault(rib, []).extend(txs)
+    return {'accounts': accounts, 'transactions': transactions}
+
+
+def parse_excel(file, column_hints: dict | None = None) -> dict:
+    if isinstance(file, bytes):
+        buf = io.BytesIO(file)
     else:
         buf = file
 
     xl = pd.ExcelFile(buf, engine='openpyxl')
 
-    accounts = _parse_accounts_sheet(xl)
-    transactions = {}
+    if 'Vos comptes' in xl.sheet_names and any(s.startswith('Cpt ') for s in xl.sheet_names):
+        try:
+            return _parse_credit_mutuel(xl)
+        except ParseError:
+            pass
 
-    for sheet in xl.sheet_names:
-        if sheet.startswith('Cpt '):
-            rib, txs = _parse_account_sheet(xl, sheet)
-            if rib in transactions:
-                transactions[rib].extend(txs)
-            else:
-                transactions[rib] = txs
-
-    return {'accounts': accounts, 'transactions': transactions}
+    raise ColumnMappingRequired([])  # remplacé à la Task 2
