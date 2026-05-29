@@ -51,7 +51,7 @@ export default function TransactionsPage() {
 
   const { data: categoriesData } = useQuery({
     queryKey: ['categories'],
-    queryFn: () => categoriesApi.list().then((r) => r.data),
+    queryFn: () => categoriesApi.list().then((r) => r.data.results),
   })
 
   const deleteMut = useMutation({
