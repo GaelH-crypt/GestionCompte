@@ -59,7 +59,11 @@ function useColumnWidths() {
   })
 
   useEffect(() => {
-    localStorage.setItem(COL_STORAGE_KEY, JSON.stringify(widths))
+    try {
+      localStorage.setItem(COL_STORAGE_KEY, JSON.stringify(widths))
+    } catch {
+      // persistance optionnelle : ignorer les erreurs de stockage (mode privé, quota plein)
+    }
   }, [widths])
 
   const dragRef = useRef<{ key: ColKey; startX: number; startWidth: number } | null>(null)
