@@ -56,3 +56,16 @@ class ProjectionEngineTest(TestCase):
         # Day 4: -800 expense -400 credit.
         self.assertAlmostEqual(result[3]['balance'], 1800.0, places=1)
         self.assertAlmostEqual(result[3]['net'], -1200.0, places=1)
+
+    def test_extra_expenses_override_reduces_balance(self):
+        from apps.projections.engine import ProjectionEngine
+        engine = ProjectionEngine(
+            current_balance=Decimal('1000'),
+            monthly_income=Decimal('2000'),
+            monthly_expenses=Decimal('1000'),
+            monthly_credits=Decimal('0'),
+            overrides={'extra_expenses': Decimal('200')},
+        )
+        result = engine.project(months=1)
+        # 1000 + (2000 - 1000 - 200 - 0) = 1800
+        self.assertAlmostEqual(result[0]['balance'], 1800.0, places=1)

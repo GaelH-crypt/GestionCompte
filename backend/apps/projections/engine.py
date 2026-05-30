@@ -203,7 +203,7 @@ def build_engine_from_user(user, overrides: dict = None) -> ProjectionEngine:
     decimal_overrides = {}
     if overrides:
         for k, v in overrides.items():
-            if k in ('income', 'expenses', 'credits') and v is not None:
+            if k in ('income', 'expenses', 'credits', 'extra_expenses') and v is not None:
                 decimal_overrides[k] = Decimal(str(v))
 
     return ProjectionEngine(
