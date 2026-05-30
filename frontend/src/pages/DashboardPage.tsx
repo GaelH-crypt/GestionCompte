@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import {
   Wallet, TrendingUp, TrendingDown, Heart,
-  CreditCard, RefreshCw, AlertTriangle,
+  CreditCard, RefreshCw, AlertTriangle, ArrowUpCircle,
 } from 'lucide-react'
 import { dashboardApi } from '@/api/dashboard'
 import { projectionsApi } from '@/api/projections'
@@ -125,7 +125,10 @@ export default function DashboardPage() {
               {summary.upcoming_deadlines.map((d, i) => (
                 <div key={i} className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <AlertTriangle className="h-4 w-4 text-yellow-400 flex-shrink-0" />
+                    {d.transaction_type === 'income'
+                      ? <ArrowUpCircle className="h-4 w-4 text-green-400 flex-shrink-0" />
+                      : <AlertTriangle className="h-4 w-4 text-yellow-400 flex-shrink-0" />
+                    }
                     <div>
                       <p className="text-sm text-gray-200">{d.name}</p>
                       <p className="text-xs text-gray-500">
@@ -133,8 +136,8 @@ export default function DashboardPage() {
                       </p>
                     </div>
                   </div>
-                  <span className="text-sm font-semibold text-red-400">
-                    -{formatEur(parseFloat(d.amount))}
+                  <span className={`text-sm font-semibold ${d.transaction_type === 'income' ? 'text-green-400' : 'text-red-400'}`}>
+                    {d.transaction_type === 'income' ? '+' : '-'}{formatEur(parseFloat(d.amount))}
                   </span>
                 </div>
               ))}
