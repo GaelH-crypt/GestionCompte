@@ -69,3 +69,48 @@ class ProjectionEngineTest(TestCase):
         result = engine.project(months=1)
         # 1000 + (2000 - 1000 - 200 - 0) = 1800
         self.assertAlmostEqual(result[0]['balance'], 1800.0, places=1)
+
+    def test_daily_projection_applies_income_override(self):
+        from apps.projections.engine import ProjectionEngine
+        # monthly_income = 0, override income = 600 → delta = 600/2 = 300/day
+        engine = ProjectionEngine(
+            current_balance=Decimal('1000'),
+            monthly_income=Decimal('0'),
+            monthly_expenses=Decimal('0'),
+            monthly_credits=Decimal('0'),
+            daily_events=[],
+            overrides={'income': Decimal('600')},
+        )
+        result = engine.project_daily(days=2)
+        self.assertAlmostEqual(result[0]['balance'], 1300.0, places=1)
+        self.assertAlmostEqual(result[1]['balance'], 1600.0, places=1)
+
+    def test_daily_projection_applies_extra_expenses_override(self):
+        from apps.projections.engine import ProjectionEngine
+        # extra_expenses = 60 → 60/2 = 30/day additional expense
+        engine = ProjectionEngine(
+            current_balance=Decimal('1000'),
+            monthly_income=Decimal('0'),
+            monthly_expenses=Decimal('0'),
+            monthly_credits=Decimal('0'),
+            daily_events=[],
+            overrides={'extra_expenses': Decimal('60')},
+        )
+        result = engine.project_daily(days=2)
+        self.assertAlmostEqual(result[0]['balance'], 970.0, places=1)
+        self.assertAlmostEqual(result[1]['balance'], 940.0, places=1)
+
+    def test_daily_projection_applies_expenses_override(self):
+        from apps.projections.engine import ProjectionEngine
+        # monthly_expenses = 0, override expenses = 100 → delta = 100/2 = 50/day
+        engine = ProjectionEngine(
+            current_balance=Decimal('1000'),
+            monthly_income=Decimal('0'),
+            monthly_expenses=Decimal('0'),
+            monthly_credits=Decimal('0'),
+            daily_events=[],
+            overrides={'expenses': Decimal('100')},
+        )
+        result = engine.project_daily(days=2)
+        self.assertAlmostEqual(result[0]['balance'], 950.0, places=1)
+        self.assertAlmostEqual(result[1]['balance'], 900.0, places=1)
