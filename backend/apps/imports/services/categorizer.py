@@ -1,12 +1,72 @@
+"""Auto-catégorisation des transactions importées par mots-clés.
+
+Chaque règle associe une liste de mots-clés (enseignes, libellés courants) à une
+catégorie **principale** de l'arbre par défaut (cf. apps.categories.defaults).
+On retourne volontairement un nom de catégorie de premier niveau : à l'import,
+le nom suggéré crée/retrouve une catégorie ``parent=None`` (cf. imports.views).
+
+L'ordre compte : la première règle qui matche gagne. Les règles les plus
+spécifiques (revenus, virements) sont placées en tête.
+"""
+
 RULES: list[tuple[list[str], str]] = [
-    (['CARREFOUR', 'LECLERC', 'LIDL', 'ALDI', 'INTERMARCHE', 'MONOPRIX', 'CASINO', 'SUPERMARCHE', 'EPICERIE', 'FRANPRIX'], 'Alimentation'),
-    (['LOYER', 'OPH', 'BAIL', 'HABITAT', 'FONCIER', 'LOCATIF', 'LOCATIVES'], 'Logement'),
-    (['EDF', 'ENGIE', 'VEOLIA', 'SUEZ', 'SOSH', 'ORANGE', 'SFR', 'FREE', 'BOUYGUES', 'TELECOM', 'ELECTRICITE', 'GAZ'], 'Factures'),
-    (['SNCF', 'RATP', 'UBER', 'TAXI', 'TOTAL', 'BP', 'SHELL', 'ESSENCE', 'AUTOROUTE', 'PARKING'], 'Transport'),
-    (['PHARMACIE', 'MEDECIN', 'DOCTEUR', 'CLINIQUE', 'HOPITAL', 'SECU', 'CPAM', 'MUTUELLE'], 'Santé'),
-    (['RESTAURANT', 'BRASSERIE', 'CAFE', 'MCDO', 'MCDONALD', 'BURGER', 'PIZZA', 'KEBAB'], 'Restauration'),
-    (['SALAIRE', 'PAIE', 'REMUNERATION'], 'Revenus'),
-    (['VIR SEPA', 'VIREMENT'], 'Virement'),
+    # Revenus
+    # NB : pas de 'PAIE'/'PAYE' (matcherait 'PAIEMENT'), ni 'CAF' (matcherait 'CAFE').
+    (['SALAIRE', 'REMUNERATION', 'POLE EMPLOI', 'ALLOCATION', 'PENSION',
+      'RETRAITE', 'DIVIDENDE', 'REMBOURSEMENT'], 'Revenus'),
+    # Virements internes
+    (['VIR SEPA', 'VIREMENT', 'VIR INST', 'VIR RECU', 'VIR EMIS'], 'Virements internes'),
+    # Banque & Frais
+    (['FRAIS BANCAIRE', 'COTISATION', 'COMMISSION', 'AGIOS', 'INTERETS DEBITEURS',
+      'FRAIS TENUE DE COMPTE', 'RETRAIT DAB', 'RETRAIT GAB', 'DISTRIBUTEUR'], 'Banque & Frais'),
+    # Alimentation (supermarchés / épicerie)
+    (['CARREFOUR', 'LECLERC', 'LIDL', 'ALDI', 'INTERMARCHE', 'MONOPRIX', 'CASINO',
+      'SUPERMARCHE', 'EPICERIE', 'FRANPRIX', 'AUCHAN', 'SUPER U', 'HYPER U',
+      'CORA', 'PICARD', 'GRAND FRAIS', 'BIOCOOP', 'NATURALIA'], 'Alimentation'),
+    # Restaurants & Bars
+    (['RESTAURANT', 'BRASSERIE', 'CAFE', 'MCDO', 'MCDONALD', 'BURGER', 'PIZZA',
+      'KEBAB', 'KFC', 'SUBWAY', 'STARBUCKS', 'DELIVEROO', 'UBER EATS', 'JUST EAT',
+      'BAR ', 'BISTROT'], 'Restaurants & Bars'),
+    # Logement (loyer, charges, énergie, eau)
+    (['LOYER', 'OPH', 'BAIL', 'HABITAT', 'FONCIER', 'LOCATIF', 'LOCATIVES',
+      'SYNDIC', 'COPROPRIETE', 'EDF', 'ENGIE', 'TOTALENERGIES', 'VEOLIA', 'SUEZ',
+      'ELECTRICITE', 'GAZ ', 'EAU '], 'Logement'),
+    # Factures & Abonnements (télécom, internet, streaming)
+    (['SOSH', 'ORANGE', 'SFR', 'FREE', 'BOUYGUES', 'TELECOM', 'INTERNET', 'BOX',
+      'NETFLIX', 'SPOTIFY', 'DEEZER', 'DISNEY', 'CANAL', 'PRIME VIDEO', 'YOUTUBE',
+      'APPLE.COM', 'GOOGLE', 'MICROSOFT', 'OVH', 'ABONNEMENT'], 'Factures & Abonnements'),
+    # Transport (carburant, transports, péage, stationnement)
+    (['SNCF', 'RATP', 'UBER', 'TAXI', 'BLABLACAR', 'TOTAL', 'BP', 'SHELL', 'ESSO',
+      'ESSENCE', 'CARBURANT', 'STATION', 'AUTOROUTE', 'PEAGE', 'VINCI', 'SANEF',
+      'PARKING', 'NAVIGO', 'TRANSDEV', 'TER '], 'Transport'),
+    # Santé
+    (['PHARMACIE', 'MEDECIN', 'DOCTEUR', 'CLINIQUE', 'HOPITAL', 'SECU', 'CPAM',
+      'MUTUELLE', 'DENTISTE', 'OPTIC', 'LABORATOIRE', 'KINE', 'OPHTALMO'], 'Santé'),
+    # Assurances
+    (['ASSURANCE', 'AXA', 'MAIF', 'MACIF', 'MAAF', 'MATMUT', 'GMF', 'GROUPAMA',
+      'ALLIANZ', 'GENERALI', 'PREVOYANCE'], 'Assurances'),
+    # Loisirs & Vacances
+    (['CINEMA', 'UGC', 'PATHE', 'GAUMONT', 'SALLE DE SPORT', 'FITNESS', 'BASIC FIT',
+      'DECATHLON', 'BOOKING', 'AIRBNB', 'HOTEL', 'SPECTACLE', 'CONCERT', 'STEAM',
+      'PLAYSTATION', 'XBOX', 'NINTENDO'], 'Loisirs & Vacances'),
+    # Shopping
+    (['AMAZON', 'FNAC', 'DARTY', 'BOULANGER', 'CDISCOUNT', 'ZARA', 'H&M', 'UNIQLO',
+      'ZALANDO', 'IKEA', 'LEROY MERLIN', 'CASTORAMA', 'SEPHORA', 'ACTION',
+      'PRIMARK', 'KIABI'], 'Shopping'),
+    # Impôts & Taxes
+    (['IMPOT', 'IMPOTS', 'DGFIP', 'TRESOR PUBLIC', 'FISC', 'TAXE FONCIERE',
+      "TAXE D'HABITATION", 'URSSAF'], 'Impôts & Taxes'),
+    # Enfants & Famille
+    (['CRECHE', 'GARDERIE', 'NOUNOU', 'CANTINE', 'PERISCOLAIRE'], 'Enfants & Famille'),
+    # Animaux
+    (['VETERINAIRE', 'VETO', 'ANIMALERIE', 'MAXI ZOO'], 'Animaux'),
+    # Éducation
+    (['UNIVERSITE', 'ECOLE', 'CROUS', 'FORMATION', 'UDEMY'], 'Éducation'),
+    # Épargne & Investissements
+    (['LIVRET A', 'LDDS', 'PEA', 'ASSURANCE VIE', 'BOURSE', 'TRADE REPUBLIC',
+      'BOURSORAMA VIE', 'COINBASE', 'BINANCE', 'CRYPTO'], 'Épargne & Investissements'),
+    # Dons & Cadeaux
+    (['DON ', 'CROIX ROUGE', 'TELETHON', 'UNICEF', 'RESTOS DU COEUR'], 'Dons & Cadeaux'),
 ]
 
 

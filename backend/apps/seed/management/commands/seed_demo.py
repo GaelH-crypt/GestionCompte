@@ -5,24 +5,11 @@ import random
 from decimal import Decimal
 
 from apps.categories.models import Category
+from apps.categories.defaults import create_default_categories
 from apps.accounts.models import Account
 from apps.transactions.models import Transaction
 from apps.recurring.models import RecurringTransaction
 from apps.credits.models import Credit
-
-
-CATEGORIES_DATA = [
-    ('Alimentation', '#22c55e', 'ShoppingCart'),
-    ('Logement', '#3b82f6', 'Home'),
-    ('Carburant', '#f59e0b', 'Fuel'),
-    ('Assurances', '#8b5cf6', 'Shield'),
-    ('Enfants', '#ec4899', 'Baby'),
-    ('Loisirs', '#06b6d4', 'Gamepad2'),
-    ('Santé', '#ef4444', 'Heart'),
-    ('Abonnements', '#6366f1', 'Repeat'),
-    ('Impôts', '#64748b', 'Landmark'),
-    ('Revenus', '#10b981', 'TrendingUp'),
-]
 
 
 class Command(BaseCommand):
@@ -46,13 +33,7 @@ class Command(BaseCommand):
             self.stdout.write('Existing data cleared.')
 
         self.stdout.write('Seeding categories...')
-        categories = {}
-        for name, color, icon in CATEGORIES_DATA:
-            cat, _ = Category.objects.get_or_create(
-                user=user, name=name, parent=None,
-                defaults={'color': color, 'icon': icon}
-            )
-            categories[name] = cat
+        categories = create_default_categories(user)
 
         self.stdout.write('Seeding accounts...')
         checking, _ = Account.objects.get_or_create(
@@ -68,7 +49,7 @@ class Command(BaseCommand):
 
         self.stdout.write('Seeding transactions...')
         today = date.today()
-        expense_cats = ['Alimentation', 'Carburant', 'Loisirs', 'Santé', 'Abonnements']
+        expense_cats = ['Courses', 'Carburant', 'Loisirs & Vacances', 'Santé', 'Restaurant']
         for i in range(60):
             tx_date = today - timedelta(days=i * 2)
             cat_name = expense_cats[i % len(expense_cats)]
@@ -94,11 +75,11 @@ class Command(BaseCommand):
 
         self.stdout.write('Seeding recurring transactions...')
         recurring_data = [
-            ('Loyer', Decimal('900'), 'expense', 'monthly', today.replace(day=1), 'Logement'),
-            ('EDF', Decimal('85'), 'expense', 'monthly', today.replace(day=5), 'Logement'),
-            ('Internet', Decimal('30'), 'expense', 'monthly', today.replace(day=10), 'Abonnements'),
-            ('Assurance voiture', Decimal('65'), 'expense', 'monthly', today.replace(day=15), 'Assurances'),
-            ('Salaire', Decimal('3200'), 'income', 'monthly', today.replace(day=28), None),
+            ('Loyer', Decimal('900'), 'expense', 'monthly', today.replace(day=1), 'Loyer'),
+            ('EDF', Decimal('85'), 'expense', 'monthly', today.replace(day=5), 'Électricité & Gaz'),
+            ('Internet', Decimal('30'), 'expense', 'monthly', today.replace(day=10), 'Internet & Box'),
+            ('Assurance voiture', Decimal('65'), 'expense', 'monthly', today.replace(day=15), 'Assurance auto'),
+            ('Salaire', Decimal('3200'), 'income', 'monthly', today.replace(day=28), 'Salaire'),
         ]
         for name, amount, tx_type, freq, next_occ, cat_name in recurring_data:
             RecurringTransaction.objects.get_or_create(
