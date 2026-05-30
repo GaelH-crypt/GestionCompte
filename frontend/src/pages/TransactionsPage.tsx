@@ -344,7 +344,7 @@ function TransactionFormModal({
       if (transaction) await transactionsApi.update(transaction.id, payload)
       else await transactionsApi.create(payload)
 
-      if (!transaction && isRecurring && type !== 'transfer') {
+      if (isRecurring && type !== 'transfer' && (!transaction || !transaction.is_recurring)) {
         try {
           await recurringApi.create({
             name: description,
