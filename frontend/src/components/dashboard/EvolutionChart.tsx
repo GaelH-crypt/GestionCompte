@@ -1,35 +1,38 @@
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Legend,
+  Tooltip, ResponsiveContainer,
 } from 'recharts'
 import { Card, CardTitle } from '@/components/ui/Card'
-import type { BalanceHistoryItem } from '@/types'
+import type { ProjectionPoint } from '@/types'
 
 interface EvolutionChartProps {
-  data: BalanceHistoryItem[]
+  data: ProjectionPoint[]
 }
 
 const formatEur = (n: number) =>
   new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(n)
 
 export function EvolutionChart({ data }: EvolutionChartProps) {
+  const minBalance = Math.min(...data.map((d) => d.balance))
+  const isNegative = minBalance < 0
+
   return (
     <Card>
-      <CardTitle>Évolution mensuelle (12 mois)</CardTitle>
+      <CardTitle>Évolution sur les 30 prochains jours</CardTitle>
       <ResponsiveContainer width="100%" height={260}>
         <AreaChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
           <defs>
-            <linearGradient id="incomeGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
-              <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
-            </linearGradient>
-            <linearGradient id="expenseGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3} />
-              <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+            <linearGradient id="balanceGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor={isNegative ? '#ef4444' : '#6366f1'} stopOpacity={0.3} />
+              <stop offset="95%" stopColor={isNegative ? '#ef4444' : '#6366f1'} stopOpacity={0} />
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-          <XAxis dataKey="month" tick={{ fill: '#6b7280', fontSize: 11 }} />
+          <XAxis
+            dataKey="month"
+            tick={{ fill: '#6b7280', fontSize: 11 }}
+            interval={4}
+          />
           <YAxis
             tick={{ fill: '#6b7280', fontSize: 11 }}
             tickFormatter={(v) => `${(v / 1000).toFixed(0)}k€`}
@@ -41,26 +44,17 @@ export function EvolutionChart({ data }: EvolutionChartProps) {
               borderRadius: '8px',
               fontSize: '12px',
             }}
-            formatter={(v: number) => [formatEur(v), '']}
-          />
-          <Legend
-            formatter={(v) => <span style={{ color: '#9ca3af', fontSize: '12px' }}>{v}</span>}
+            formatter={(v: number) => [formatEur(v), 'Solde']}
+            labelFormatter={(label) => `Jour : ${label}`}
           />
           <Area
             type="monotone"
-            dataKey="income"
-            name="Revenus"
-            stroke="#22c55e"
-            fill="url(#incomeGrad)"
+            dataKey="balance"
+            name="Solde"
+            stroke={isNegative ? '#ef4444' : '#6366f1'}
+            fill="url(#balanceGrad)"
             strokeWidth={2}
-          />
-          <Area
-            type="monotone"
-            dataKey="expenses"
-            name="Dépenses"
-            stroke="#ef4444"
-            fill="url(#expenseGrad)"
-            strokeWidth={2}
+            dot={false}
           />
         </AreaChart>
       </ResponsiveContainer>

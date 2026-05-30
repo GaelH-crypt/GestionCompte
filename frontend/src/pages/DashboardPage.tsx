@@ -4,6 +4,7 @@ import {
   CreditCard, RefreshCw, AlertTriangle,
 } from 'lucide-react'
 import { dashboardApi } from '@/api/dashboard'
+import { projectionsApi } from '@/api/projections'
 import { StatCard } from '@/components/dashboard/StatCard'
 import { ExpensesChart } from '@/components/dashboard/ExpensesChart'
 import { EvolutionChart } from '@/components/dashboard/EvolutionChart'
@@ -22,8 +23,8 @@ export default function DashboardPage() {
   })
 
   const { data: history } = useQuery({
-    queryKey: ['dashboard-history'],
-    queryFn: () => dashboardApi.history().then((r) => r.data),
+    queryKey: ['projections-daily-dashboard'],
+    queryFn: () => projectionsApi.project(1).then((r) => r.data),
   })
 
   if (loadingSummary || !summary) return <PageSpinner />
