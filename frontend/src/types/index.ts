@@ -182,11 +182,18 @@ export interface ProjectionPoint {
   delta?: number
 }
 
+export interface SimulationExpenseItem {
+  id: string
+  label: string
+  amount: number
+}
+
 export interface SimulationParams {
   months: number
   income?: number
   expenses?: number
   credits?: number
+  extra_expenses?: Pick<SimulationExpenseItem, 'label' | 'amount'>[]
 }
 
 // ─── API ───────────────────────────────────────────────────────────────────
