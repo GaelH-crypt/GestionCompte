@@ -121,3 +121,52 @@ class DetectRecurringTest(TestCase):
             self._tx('LESS FREQUENT', '20.00', 'expense', d)
         suggestions = detect_recurring_suggestions(self.user)
         self.assertGreaterEqual(suggestions[0]['occurrence_count'], suggestions[1]['occurrence_count'])
+
+
+class DetectRecurringEndpointTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user('endpointuser', password='pass')
+        self.client.force_authenticate(user=self.user)
+        self.account = Account.objects.create(
+            user=self.user, name='Main', account_type='checking',
+            initial_balance=0, color='#fff', icon='CreditCard'
+        )
+
+    def _tx(self, description, amount, tx_type, date_str):
+        from apps.transactions.models import Transaction
+        return Transaction.objects.create(
+            user=self.user, account=self.account,
+            transaction_type=tx_type, amount=amount,
+            description=description, date=date_str,
+        )
+
+    def test_endpoint_returns_suggestions(self):
+        for d in ['2026-01-15', '2026-02-15', '2026-03-15']:
+            self._tx('PRLV SEPA ORANGE', '24.99', 'expense', d)
+        resp = self.client.get('/api/transactions/detect-recurring/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.data), 1)
+        self.assertEqual(resp.data[0]['frequency'], 'monthly')
+
+    def test_endpoint_requires_authentication(self):
+        unauth = APIClient()
+        resp = unauth.get('/api/transactions/detect-recurring/')
+        self.assertEqual(resp.status_code, 401)
+
+    def test_endpoint_isolates_by_user(self):
+        other = User.objects.create_user('otheruser2', password='pass')
+        other_account = Account.objects.create(
+            user=other, name='Other', account_type='checking',
+            initial_balance=0, color='#fff', icon='CreditCard'
+        )
+        from apps.transactions.models import Transaction
+        for d in ['2026-01-15', '2026-02-15', '2026-03-15']:
+            Transaction.objects.create(
+                user=other, account=other_account,
+                transaction_type='expense', amount='99.99',
+                description='OTHER USER TX', date=d,
+            )
+        resp = self.client.get('/api/transactions/detect-recurring/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.data), 0)
