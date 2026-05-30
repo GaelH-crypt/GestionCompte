@@ -12,6 +12,7 @@ import { PageSpinner } from '@/components/ui/Spinner'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import type { Frequency, RecurringTransaction, Credit } from '@/types'
+import { renderCategoryOptions } from '@/utils/categoryOptions'
 
 const formatEur = (n: number | string) =>
   new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(parseFloat(String(n)))
@@ -331,9 +332,7 @@ function RecurringFormModal({ item, credits, onClose, onSaved }: RecurringFormMo
             <label className="text-sm font-medium text-gray-400">Catégorie (optionnel)</label>
             <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className={sel}>
               <option value="">Aucune</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
+              {renderCategoryOptions(categories)}
             </select>
           </div>
 

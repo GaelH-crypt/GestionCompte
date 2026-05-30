@@ -1,4 +1,5 @@
 import type { ImportedTransaction, AccountMapping, Category } from '@/types'
+import { renderCategoryOptions } from '@/utils/categoryOptions'
 
 interface Props {
   transactions: Record<string, ImportedTransaction[]>
@@ -55,9 +56,7 @@ export function StepPreview({ transactions, mapping, duplicateCounts, categories
                           onChange={(e) => onChange(rib, i, e.target.value ? Number(e.target.value) : null)}
                         >
                           <option value="">Sans catégorie</option>
-                          {categories.map((c) => (
-                            <option key={c.id} value={c.id}>{c.name}</option>
-                          ))}
+                          {renderCategoryOptions(categories)}
                         </select>
                       </td>
                       <td className="px-2 py-2 text-center">

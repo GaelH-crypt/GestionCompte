@@ -1,3 +1,175 @@
+# Subcategories Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Permettre la gestion complète des sous-catégories (voir/ajouter/supprimer) dans CategoriesPage, et afficher les sous-catégories dans les sélecteurs de catégorie via `<optgroup>`.
+
+**Architecture:** Un helper `renderCategoryOptions` extrait dans `frontend/src/utils/categoryOptions.tsx` est utilisé par TransactionsPage, RecurringPage et ImportWizard. CategoriesPage est réécrite pour supporter l'expand/collapse par parent et l'ajout/suppression de sous-catégories. Aucun changement backend nécessaire.
+
+**Tech Stack:** React 18, TypeScript, TanStack Query, Tailwind CSS, Lucide icons. API `/categories/` retourne déjà `subcategories[]` imbriquées.
+
+---
+
+## Fichiers
+
+| Action | Fichier |
+|--------|---------|
+| Créer | `frontend/src/utils/categoryOptions.tsx` |
+| Modifier | `frontend/src/pages/TransactionsPage.tsx` |
+| Modifier | `frontend/src/pages/RecurringPage.tsx` |
+| Modifier | `frontend/src/components/ImportWizard/StepPreview.tsx` |
+| Modifier | `frontend/src/pages/CategoriesPage.tsx` |
+
+---
+
+## Task 1 — Helper `renderCategoryOptions`
+
+**Fichiers :**
+- Créer : `frontend/src/utils/categoryOptions.tsx`
+
+- [ ] **Créer le fichier**
+
+```tsx
+import type { Category } from '@/types'
+
+export function renderCategoryOptions(categories: Category[]) {
+  return categories.map((c) =>
+    c.subcategories && c.subcategories.length > 0 ? (
+      <optgroup key={c.id} label={c.name}>
+        {c.subcategories.map((s) => (
+          <option key={s.id} value={s.id}>{s.name}</option>
+        ))}
+      </optgroup>
+    ) : (
+      <option key={c.id} value={c.id}>{c.name}</option>
+    )
+  )
+}
+```
+
+- [ ] **Vérifier la compilation**
+
+```bash
+docker compose build frontend 2>&1 | grep -E "error|Error|warn" | grep -v "node_modules" | head -10
+```
+
+Attendu : aucune erreur TypeScript.
+
+- [ ] **Commit**
+
+```bash
+git add frontend/src/utils/categoryOptions.tsx
+git commit -m "feat(categories): helper renderCategoryOptions avec optgroup"
+```
+
+---
+
+## Task 2 — Sélecteurs catégorie (TransactionsPage, RecurringPage, ImportWizard)
+
+**Fichiers :**
+- Modifier : `frontend/src/pages/TransactionsPage.tsx`
+- Modifier : `frontend/src/pages/RecurringPage.tsx`
+- Modifier : `frontend/src/components/ImportWizard/StepPreview.tsx`
+
+### 2a — TransactionsPage (`TransactionFormModal`)
+
+- [ ] **Ajouter l'import dans `TransactionsPage.tsx`**
+
+Ajouter après les imports existants :
+
+```tsx
+import { renderCategoryOptions } from '@/utils/categoryOptions'
+```
+
+- [ ] **Remplacer le select catégorie dans `TransactionFormModal`**
+
+Localiser le bloc (autour de la ligne 438-448) :
+```tsx
+<option value="">Sans catégorie</option>
+{(Array.isArray(categories) ? categories : []).map((c) => (
+  <option key={c.id} value={c.id}>{c.name}</option>
+))}
+```
+
+Remplacer par :
+```tsx
+<option value="">Sans catégorie</option>
+{renderCategoryOptions(Array.isArray(categories) ? categories : [])}
+```
+
+### 2b — RecurringPage (`RecurringFormModal`)
+
+- [ ] **Ajouter l'import dans `RecurringPage.tsx`**
+
+```tsx
+import { renderCategoryOptions } from '@/utils/categoryOptions'
+```
+
+- [ ] **Remplacer le select catégorie dans `RecurringFormModal`**
+
+Localiser le bloc (autour de la ligne 332-335) :
+```tsx
+<option value="">Aucune</option>
+{categories.map((c) => (
+  <option key={c.id} value={c.id}>{c.name}</option>
+))}
+```
+
+Remplacer par :
+```tsx
+<option value="">Aucune</option>
+{renderCategoryOptions(categories)}
+```
+
+### 2c — StepPreview (ImportWizard)
+
+- [ ] **Ajouter l'import dans `StepPreview.tsx`**
+
+```tsx
+import { renderCategoryOptions } from '@/utils/categoryOptions'
+```
+
+- [ ] **Remplacer le select catégorie dans `StepPreview.tsx`**
+
+Localiser le bloc (autour de la ligne 57-60) :
+```tsx
+<option value="">Sans catégorie</option>
+{categories.map((c) => (
+  <option key={c.id} value={c.id}>{c.name}</option>
+))}
+```
+
+Remplacer par :
+```tsx
+<option value="">Sans catégorie</option>
+{renderCategoryOptions(categories)}
+```
+
+- [ ] **Vérifier la compilation**
+
+```bash
+docker compose build frontend 2>&1 | grep -E "^.*error TS" | grep -v "node_modules" | head -10
+```
+
+Attendu : aucune erreur.
+
+- [ ] **Commit**
+
+```bash
+git add frontend/src/pages/TransactionsPage.tsx frontend/src/pages/RecurringPage.tsx frontend/src/components/ImportWizard/StepPreview.tsx
+git commit -m "feat(categories): sélecteurs catégorie avec optgroup pour sous-catégories"
+```
+
+---
+
+## Task 3 — CategoriesPage avec gestion des sous-catégories
+
+**Fichiers :**
+- Modifier : `frontend/src/pages/CategoriesPage.tsx`
+
+- [ ] **Remplacer le contenu entier de `CategoriesPage.tsx`**
+
+```tsx
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Trash2, Tag, ChevronDown, ChevronRight } from 'lucide-react'
@@ -230,3 +402,52 @@ export default function CategoriesPage() {
     </div>
   )
 }
+```
+
+- [ ] **Vérifier la compilation**
+
+```bash
+docker compose build frontend 2>&1 | grep -E "^.*error TS" | grep -v "node_modules" | head -10
+```
+
+Attendu : aucune erreur.
+
+- [ ] **Commit**
+
+```bash
+git add frontend/src/pages/CategoriesPage.tsx
+git commit -m "feat(categories): gestion sous-catégories — expand/collapse, ajout, suppression"
+```
+
+---
+
+## Task 4 — Build et déploiement
+
+- [ ] **Build et déploiement final**
+
+```bash
+docker compose build frontend 2>&1 | tail -3
+docker compose up frontend 2>&1 | tail -3
+```
+
+Attendu : `Frontend build copied to shared volume`, exit code 0.
+
+- [ ] **Tests manuels dans le navigateur** (http://localhost:8085)
+
+1. **CategoriesPage** :
+   - Cliquer le chevron `›` sur une catégorie avec sous-catégories → panneau s'ouvre
+   - Cliquer `+ Sous-catégorie` → champ inline apparaît
+   - Saisir un nom + Ajouter → sous-catégorie apparaît dans la liste
+   - Cliquer la corbeille sur une sous-catégorie → supprimée
+   - Cliquer à nouveau le chevron → panneau se referme
+
+2. **Formulaire transaction** :
+   - Créer / éditer une transaction → select catégorie affiche des `<optgroup>` pour les catégories avec sous-catégories
+   - Les catégories sans sous-catégories restent sélectionnables directement
+   - Sélectionner une sous-catégorie → sauvegardé correctement
+
+3. **ImportWizard** :
+   - Importer un fichier → colonne catégorie affiche le même select avec optgroups
+
+4. **RecurringPage** :
+   - Créer / éditer une récurrente → select catégorie avec optgroups
