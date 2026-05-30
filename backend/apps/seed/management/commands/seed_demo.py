@@ -49,6 +49,8 @@ class Command(BaseCommand):
 
         self.stdout.write('Seeding transactions...')
         today = date.today()
+        # Lookup défensif : si une catégorie par défaut est renommée, on retombe
+        # sur None (catégorie nullable) plutôt que de lever un KeyError.
         expense_cats = ['Courses', 'Carburant', 'Loisirs & Vacances', 'Santé', 'Restaurant']
         for i in range(60):
             tx_date = today - timedelta(days=i * 2)
@@ -59,18 +61,18 @@ class Command(BaseCommand):
                 date=tx_date, transaction_type='expense',
                 defaults={
                     'amount': Decimal(str(round(random.uniform(15, 120), 2))),
-                    'category': categories[cat_name],
+                    'category': categories.get(cat_name),
                 }
             )
 
-        # Two months of salary
+        # Two months of salary — même catégorie que la charge récurrente "Salaire".
         for m in range(2):
             salary_date = today.replace(day=28) - timedelta(days=30 * m)
             Transaction.objects.get_or_create(
                 user=user, account=checking,
                 description=f'Salaire {salary_date.strftime("%B %Y")}',
                 date=salary_date, transaction_type='income',
-                defaults={'amount': Decimal('3200'), 'category': categories['Revenus']}
+                defaults={'amount': Decimal('3200'), 'category': categories.get('Salaire')}
             )
 
         self.stdout.write('Seeding recurring transactions...')
