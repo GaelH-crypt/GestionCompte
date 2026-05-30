@@ -16,6 +16,7 @@ import { ImportWizard } from '@/components/ImportWizard/ImportWizard'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import type { Transaction, TransactionType, Frequency, RecurringSuggestion } from '@/types'
+import { renderCategoryOptions } from '@/utils/categoryOptions'
 
 const formatEur = (n: number | string) =>
   new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(parseFloat(String(n)))
@@ -442,9 +443,7 @@ function TransactionFormModal({
               className={sel}
             >
               <option value="">Sans catégorie</option>
-              {(Array.isArray(categories) ? categories : []).map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
+              {renderCategoryOptions(Array.isArray(categories) ? categories : [])}
             </select>
           </div>
           {type !== 'transfer' && (
