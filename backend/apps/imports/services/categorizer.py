@@ -6,7 +6,9 @@ On retourne volontairement un nom de catégorie de premier niveau : à l'import,
 le nom suggéré crée/retrouve une catégorie ``parent=None`` (cf. imports.views).
 
 L'ordre compte : la première règle qui matche gagne. Les règles les plus
-spécifiques (revenus, virements) sont placées en tête.
+spécifiques doivent précéder les plus larges qui pourraient les masquer —
+ex. 'TAXE FONCIERE' (Impôts) avant 'FONCIER' (Logement), 'ASSURANCE VIE'
+(Épargne) avant 'ASSURANCE' (Assurances).
 """
 
 RULES: list[tuple[list[str], str]] = [
@@ -27,6 +29,10 @@ RULES: list[tuple[list[str], str]] = [
     (['RESTAURANT', 'BRASSERIE', 'CAFE', 'MCDO', 'MCDONALD', 'BURGER', 'PIZZA',
       'KEBAB', 'KFC', 'SUBWAY', 'STARBUCKS', 'DELIVEROO', 'UBER EATS', 'JUST EAT',
       'BAR ', 'BISTROT'], 'Restaurants & Bars'),
+    # Impôts & Taxes — AVANT Logement : 'TAXE FONCIERE' ne doit pas être
+    # capturé par le mot-clé 'FONCIER' de la règle Logement.
+    (['IMPOT', 'IMPOTS', 'DGFIP', 'TRESOR PUBLIC', 'FISC', 'TAXE FONCIERE',
+      "TAXE D'HABITATION", 'URSSAF'], 'Impôts & Taxes'),
     # Logement (loyer, charges, énergie, eau)
     (['LOYER', 'OPH', 'BAIL', 'HABITAT', 'FONCIER', 'LOCATIF', 'LOCATIVES',
       'SYNDIC', 'COPROPRIETE', 'EDF', 'ENGIE', 'TOTALENERGIES', 'VEOLIA', 'SUEZ',
@@ -42,6 +48,10 @@ RULES: list[tuple[list[str], str]] = [
     # Santé
     (['PHARMACIE', 'MEDECIN', 'DOCTEUR', 'CLINIQUE', 'HOPITAL', 'SECU', 'CPAM',
       'MUTUELLE', 'DENTISTE', 'OPTIC', 'LABORATOIRE', 'KINE', 'OPHTALMO'], 'Santé'),
+    # Épargne & Investissements — AVANT Assurances : 'ASSURANCE VIE' ne doit
+    # pas être capturé par le mot-clé générique 'ASSURANCE'.
+    (['ASSURANCE VIE', 'LIVRET A', 'LDDS', 'PEA', 'BOURSE', 'TRADE REPUBLIC',
+      'BOURSORAMA VIE', 'COINBASE', 'BINANCE', 'CRYPTO'], 'Épargne & Investissements'),
     # Assurances
     (['ASSURANCE', 'AXA', 'MAIF', 'MACIF', 'MAAF', 'MATMUT', 'GMF', 'GROUPAMA',
       'ALLIANZ', 'GENERALI', 'PREVOYANCE'], 'Assurances'),
@@ -53,18 +63,12 @@ RULES: list[tuple[list[str], str]] = [
     (['AMAZON', 'FNAC', 'DARTY', 'BOULANGER', 'CDISCOUNT', 'ZARA', 'H&M', 'UNIQLO',
       'ZALANDO', 'IKEA', 'LEROY MERLIN', 'CASTORAMA', 'SEPHORA', 'ACTION',
       'PRIMARK', 'KIABI'], 'Shopping'),
-    # Impôts & Taxes
-    (['IMPOT', 'IMPOTS', 'DGFIP', 'TRESOR PUBLIC', 'FISC', 'TAXE FONCIERE',
-      "TAXE D'HABITATION", 'URSSAF'], 'Impôts & Taxes'),
     # Enfants & Famille
     (['CRECHE', 'GARDERIE', 'NOUNOU', 'CANTINE', 'PERISCOLAIRE'], 'Enfants & Famille'),
     # Animaux
     (['VETERINAIRE', 'VETO', 'ANIMALERIE', 'MAXI ZOO'], 'Animaux'),
     # Éducation
     (['UNIVERSITE', 'ECOLE', 'CROUS', 'FORMATION', 'UDEMY'], 'Éducation'),
-    # Épargne & Investissements
-    (['LIVRET A', 'LDDS', 'PEA', 'ASSURANCE VIE', 'BOURSE', 'TRADE REPUBLIC',
-      'BOURSORAMA VIE', 'COINBASE', 'BINANCE', 'CRYPTO'], 'Épargne & Investissements'),
     # Dons & Cadeaux
     (['DON ', 'CROIX ROUGE', 'TELETHON', 'UNICEF', 'RESTOS DU COEUR'], 'Dons & Cadeaux'),
 ]
