@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Plus, Trash2, Pencil, Search, Upload,
@@ -32,6 +32,67 @@ const TYPE_COLOR: Record<TransactionType, string> = {
   transfer: 'text-blue-400',
 }
 
+type ColKey = 'icon' | 'description' | 'account' | 'category' | 'date' | 'amount' | 'actions'
+
+const COLUMNS: { key: ColKey; label: string; width: number; resizable: boolean }[] = [
+  { key: 'icon', label: '', width: 48, resizable: false },
+  { key: 'description', label: 'Description', width: 260, resizable: true },
+  { key: 'account', label: 'Compte', width: 150, resizable: true },
+  { key: 'category', label: 'Catégorie', width: 150, resizable: true },
+  { key: 'date', label: 'Date', width: 120, resizable: true },
+  { key: 'amount', label: 'Montant', width: 130, resizable: true },
+  { key: 'actions', label: '', width: 90, resizable: false },
+]
+
+const MIN_COL_WIDTH = 60
+const COL_STORAGE_KEY = 'tx-col-widths'
+
+function useColumnWidths() {
+  const [widths, setWidths] = useState<Record<ColKey, number>>(() => {
+    const defaults = Object.fromEntries(COLUMNS.map((c) => [c.key, c.width])) as Record<ColKey, number>
+    try {
+      const saved = JSON.parse(localStorage.getItem(COL_STORAGE_KEY) || '{}')
+      return { ...defaults, ...saved }
+    } catch {
+      return defaults
+    }
+  })
+
+  useEffect(() => {
+    localStorage.setItem(COL_STORAGE_KEY, JSON.stringify(widths))
+  }, [widths])
+
+  const dragRef = useRef<{ key: ColKey; startX: number; startWidth: number } | null>(null)
+
+  function startResize(key: ColKey, e: React.MouseEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    dragRef.current = { key, startX: e.clientX, startWidth: widths[key] }
+
+    function onMove(ev: MouseEvent) {
+      const d = dragRef.current
+      if (!d) return
+      const next = Math.max(MIN_COL_WIDTH, d.startWidth + (ev.clientX - d.startX))
+      setWidths((w) => ({ ...w, [d.key]: next }))
+    }
+    function onUp() {
+      dragRef.current = null
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      document.body.style.userSelect = ''
+      document.body.style.cursor = ''
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    document.body.style.userSelect = 'none'
+    document.body.style.cursor = 'col-resize'
+  }
+
+  const total = COLUMNS.reduce((sum, c) => sum + widths[c.key], 0)
+
+  return { widths, startResize, total }
+}
+
 export default function TransactionsPage() {
   const qc = useQueryClient()
   const [showForm, setShowForm] = useState(false)
@@ -40,6 +101,7 @@ export default function TransactionsPage() {
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
   const [page, setPage] = useState(1)
+  const { widths, startResize, total } = useColumnWidths()
 
   const params: Record<string, string | number> = { page }
   if (search) params.search = search
@@ -103,15 +165,29 @@ export default function TransactionsPage() {
       {/* Table */}
       <Card padding={false}>
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="table-fixed" style={{ width: total }}>
+            <colgroup>
+              {COLUMNS.map((c) => (
+                <col key={c.key} style={{ width: widths[c.key] }} />
+              ))}
+            </colgroup>
             <thead>
               <tr className="border-b border-gray-800">
-                {['', 'Description', 'Compte', 'Catégorie', 'Date', 'Montant', ''].map((h, i) => (
+                {COLUMNS.map((c) => (
                   <th
-                    key={i}
-                    className="text-left text-xs text-gray-500 font-medium px-4 py-3 first:pl-6 last:pr-4"
+                    key={c.key}
+                    className="relative text-left text-xs text-gray-500 font-medium px-4 py-3 first:pl-6 last:pr-4 select-none"
                   >
-                    {h}
+                    <span className="block truncate">{c.label}</span>
+                    {c.resizable && (
+                      <span
+                        onMouseDown={(e) => startResize(c.key, e)}
+                        className="absolute top-0 right-0 h-full w-2 cursor-col-resize group flex justify-center"
+                        title="Glisser pour redimensionner"
+                      >
+                        <span className="w-px h-full bg-transparent group-hover:bg-brand-500 transition-colors" />
+                      </span>
+                    )}
                   </th>
                 ))}
               </tr>
@@ -123,16 +199,20 @@ export default function TransactionsPage() {
                   className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors"
                 >
                   <td className="pl-6 pr-2 py-3">{TYPE_ICON[tx.transaction_type]}</td>
-                  <td className="px-4 py-3 text-sm text-gray-200 max-w-[200px] truncate">
+                  <td className="px-4 py-3 text-sm text-gray-200 truncate" title={tx.description}>
                     {tx.description}
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-400">{tx.account_name}</td>
-                  <td className="px-4 py-3 text-sm text-gray-400">{tx.category_name ?? '—'}</td>
-                  <td className="px-4 py-3 text-sm text-gray-400 whitespace-nowrap">
+                  <td className="px-4 py-3 text-sm text-gray-400 truncate" title={tx.account_name}>
+                    {tx.account_name}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-400 truncate" title={tx.category_name ?? '—'}>
+                    {tx.category_name ?? '—'}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-400 whitespace-nowrap truncate">
                     {format(new Date(tx.date), 'd MMM yyyy', { locale: fr })}
                   </td>
                   <td
-                    className={`px-4 py-3 text-sm font-semibold whitespace-nowrap ${TYPE_COLOR[tx.transaction_type]}`}
+                    className={`px-4 py-3 text-sm font-semibold whitespace-nowrap truncate ${TYPE_COLOR[tx.transaction_type]}`}
                   >
                     {tx.transaction_type === 'income' ? '+' : '-'}
                     {formatEur(tx.amount)}
