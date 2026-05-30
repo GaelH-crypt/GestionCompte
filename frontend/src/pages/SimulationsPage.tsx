@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { Beaker, Play, RotateCcw, Plus, Trash2 } from 'lucide-react'
 import { projectionsApi } from '@/api/projections'
@@ -6,6 +6,7 @@ import { ProjectionChart } from '@/components/projections/ProjectionChart'
 import { Card, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import { useAuthStore } from '@/store/authStore'
 import type { ProjectionPoint, SimulationExpenseItem } from '@/types'
 
 const formatEur = (n: number) =>
@@ -14,11 +15,13 @@ const formatEur = (n: number) =>
 const HORIZONS = [3, 6, 12, 60]
 const HORIZON_LABELS: Record<number, string> = { 3: '3 mois', 6: '6 mois', 12: '1 an', 60: '5 ans' }
 
-const STORAGE_KEY = 'simulation_extra_expenses'
+function storageKey(userId: number | undefined) {
+  return `simulation_extra_expenses_${userId ?? 'anon'}`
+}
 
-function loadStoredExpenses(): SimulationExpenseItem[] {
+function loadStoredExpenses(userId: number | undefined): SimulationExpenseItem[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = localStorage.getItem(storageKey(userId))
     if (raw) return JSON.parse(raw)
   } catch {
     // ignore parse errors
@@ -26,25 +29,34 @@ function loadStoredExpenses(): SimulationExpenseItem[] {
   return []
 }
 
-function saveExpenses(items: SimulationExpenseItem[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(items))
+function saveExpenses(userId: number | undefined, items: SimulationExpenseItem[]) {
+  localStorage.setItem(storageKey(userId), JSON.stringify(items))
 }
 
 export default function SimulationsPage() {
+  const user = useAuthStore((s) => s.user)
   const [months, setMonths] = useState(12)
   const [income, setIncome] = useState('')
   const [expenses, setExpenses] = useState('')
   const [credits, setCredits] = useState('')
   const [result, setResult] = useState<ProjectionPoint[] | null>(null)
 
-  // Extra expenses — persisted in localStorage
-  const [extraExpenses, setExtraExpenses] = useState<SimulationExpenseItem[]>(loadStoredExpenses)
+  // Extra expenses — persisted in localStorage, scoped per user
+  const [extraExpenses, setExtraExpenses] = useState<SimulationExpenseItem[]>(() =>
+    loadStoredExpenses(user?.id)
+  )
   const [newLabel, setNewLabel] = useState('')
   const [newAmount, setNewAmount] = useState('')
 
+  // Reload from localStorage when the logged-in user changes
+  useEffect(() => {
+    setExtraExpenses(loadStoredExpenses(user?.id))
+    setResult(null)
+  }, [user?.id])
+
   function updateExtraExpenses(items: SimulationExpenseItem[]) {
     setExtraExpenses(items)
-    saveExpenses(items)
+    saveExpenses(user?.id, items)
   }
 
   function addExpenseItem() {
