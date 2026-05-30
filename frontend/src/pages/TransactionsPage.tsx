@@ -318,6 +318,7 @@ function TransactionFormModal({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [isRecurring, setIsRecurring] = useState(transaction?.is_recurring ?? false)
+  const [recurringJustEnabled, setRecurringJustEnabled] = useState(false)
   const [recurringFrequency, setRecurringFrequency] = useState<Frequency>('monthly')
   const [recurringNextOccurrence, setRecurringNextOccurrence] = useState(
     transaction?.date ?? new Date().toISOString().slice(0, 10)
@@ -352,7 +353,7 @@ function TransactionFormModal({
       if (transaction) await transactionsApi.update(transaction.id, payload)
       else await transactionsApi.create(payload)
 
-      if (isRecurring && type !== 'transfer') {
+      if (isRecurring && type !== 'transfer' && (!transaction || recurringJustEnabled)) {
         try {
           await recurringApi.create({
             name: description,
@@ -452,7 +453,7 @@ function TransactionFormModal({
                 <input
                   type="checkbox"
                   checked={isRecurring}
-                  onChange={(e) => setIsRecurring(e.target.checked)}
+                  onChange={(e) => { setIsRecurring(e.target.checked); setRecurringJustEnabled(e.target.checked) }}
                   className="accent-brand-500"
                 />
                 <span className="text-sm text-gray-300">Enregistrer comme récurrente</span>
