@@ -1,12 +1,13 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useMutation } from '@tanstack/react-query'
-import { Beaker, Play, RotateCcw } from 'lucide-react'
+import { Beaker, Play, RotateCcw, Plus, Trash2 } from 'lucide-react'
 import { projectionsApi } from '@/api/projections'
 import { ProjectionChart } from '@/components/projections/ProjectionChart'
 import { Card, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import type { ProjectionPoint } from '@/types'
+import { useAuthStore } from '@/store/authStore'
+import type { ProjectionPoint, SimulationExpenseItem } from '@/types'
 
 const formatEur = (n: number) =>
   new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(n)
@@ -14,12 +15,66 @@ const formatEur = (n: number) =>
 const HORIZONS = [3, 6, 12, 60]
 const HORIZON_LABELS: Record<number, string> = { 3: '3 mois', 6: '6 mois', 12: '1 an', 60: '5 ans' }
 
+function storageKey(userId: number | undefined) {
+  return `simulation_extra_expenses_${userId ?? 'anon'}`
+}
+
+function loadStoredExpenses(userId: number | undefined): SimulationExpenseItem[] {
+  try {
+    const raw = localStorage.getItem(storageKey(userId))
+    if (raw) return JSON.parse(raw)
+  } catch {
+    // ignore parse errors
+  }
+  return []
+}
+
+function saveExpenses(userId: number | undefined, items: SimulationExpenseItem[]) {
+  localStorage.setItem(storageKey(userId), JSON.stringify(items))
+}
+
 export default function SimulationsPage() {
+  const user = useAuthStore((s) => s.user)
   const [months, setMonths] = useState(12)
   const [income, setIncome] = useState('')
   const [expenses, setExpenses] = useState('')
   const [credits, setCredits] = useState('')
   const [result, setResult] = useState<ProjectionPoint[] | null>(null)
+
+  // Extra expenses — persisted in localStorage, scoped per user
+  const [extraExpenses, setExtraExpenses] = useState<SimulationExpenseItem[]>(() =>
+    loadStoredExpenses(user?.id)
+  )
+  const [newLabel, setNewLabel] = useState('')
+  const [newAmount, setNewAmount] = useState('')
+
+  // Reload from localStorage when the logged-in user changes
+  useEffect(() => {
+    setExtraExpenses(loadStoredExpenses(user?.id))
+    setResult(null)
+  }, [user?.id])
+
+  function updateExtraExpenses(items: SimulationExpenseItem[]) {
+    setExtraExpenses(items)
+    saveExpenses(user?.id, items)
+  }
+
+  function addExpenseItem() {
+    const amount = parseFloat(newAmount)
+    if (!newLabel.trim() || isNaN(amount) || amount <= 0) return
+    const item: SimulationExpenseItem = {
+      id: crypto.randomUUID(),
+      label: newLabel.trim(),
+      amount,
+    }
+    updateExtraExpenses([...extraExpenses, item])
+    setNewLabel('')
+    setNewAmount('')
+  }
+
+  function removeExpenseItem(id: string) {
+    updateExtraExpenses(extraExpenses.filter((e) => e.id !== id))
+  }
 
   const { mutate, isPending } = useMutation({
     mutationFn: projectionsApi.simulate,
@@ -32,6 +87,9 @@ export default function SimulationsPage() {
       income: income ? parseFloat(income) : undefined,
       expenses: expenses ? parseFloat(expenses) : undefined,
       credits: credits ? parseFloat(credits) : undefined,
+      extra_expenses: extraExpenses.length > 0
+        ? extraExpenses.map(({ label, amount }) => ({ label, amount }))
+        : undefined,
     })
   }
 
@@ -43,6 +101,7 @@ export default function SimulationsPage() {
   }
 
   const last = result?.[result.length - 1]
+  const extraTotal = extraExpenses.reduce((s, e) => s + e.amount, 0)
 
   return (
     <div className="space-y-6">
@@ -103,6 +162,75 @@ export default function SimulationsPage() {
               onChange={(e) => setCredits(e.target.value)}
               placeholder="Laisser vide = valeur réelle"
             />
+
+            {/* Extra expenses */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium text-gray-400">
+                  Dépenses supplémentaires
+                </label>
+                {extraTotal > 0 && (
+                  <span className="text-xs text-orange-400 font-medium">
+                    +{formatEur(extraTotal)}/mois
+                  </span>
+                )}
+              </div>
+
+              {/* Existing items */}
+              {extraExpenses.length > 0 && (
+                <ul className="space-y-1.5 mb-3">
+                  {extraExpenses.map((item) => (
+                    <li
+                      key={item.id}
+                      className="flex items-center justify-between bg-gray-800/60 rounded-lg px-3 py-2 text-sm"
+                    >
+                      <span className="text-gray-300 truncate mr-2">{item.label}</span>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className="text-orange-400 font-medium">{formatEur(item.amount)}</span>
+                        <button
+                          onClick={() => removeExpenseItem(item.id)}
+                          className="text-gray-600 hover:text-red-400 transition-colors"
+                          title="Supprimer"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {/* Add new item */}
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  value={newLabel}
+                  onChange={(e) => setNewLabel(e.target.value)}
+                  placeholder="Type (ex: Carburant)"
+                  className="w-full bg-gray-800 border border-gray-700 hover:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-500 transition-colors"
+                  onKeyDown={(e) => e.key === 'Enter' && addExpenseItem()}
+                />
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={newAmount}
+                    onChange={(e) => setNewAmount(e.target.value)}
+                    placeholder="Montant (€)"
+                    className="flex-1 bg-gray-800 border border-gray-700 hover:border-gray-600 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-500 transition-colors"
+                    onKeyDown={(e) => e.key === 'Enter' && addExpenseItem()}
+                  />
+                  <button
+                    onClick={addExpenseItem}
+                    disabled={!newLabel.trim() || !newAmount || parseFloat(newAmount) <= 0}
+                    className="flex items-center gap-1 px-3 py-2 bg-brand-500 hover:bg-brand-600 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
 
             <div className="flex flex-col gap-2 pt-1">
               <Button onClick={handleSimulate} loading={isPending} className="w-full">

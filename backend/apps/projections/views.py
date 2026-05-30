@@ -48,6 +48,17 @@ def simulation_view(request):
             except (ValueError, TypeError):
                 pass
 
+    extra_expenses_list = request.data.get('extra_expenses', [])
+    if isinstance(extra_expenses_list, list):
+        total_extra = 0.0
+        for item in extra_expenses_list:
+            try:
+                total_extra += float(item.get('amount', 0))
+            except (ValueError, TypeError, AttributeError):
+                pass
+        if total_extra > 0:
+            overrides['extra_expenses'] = total_extra
+
     engine = build_engine_from_user(request.user, overrides=overrides)
     result = engine.project(months)
 

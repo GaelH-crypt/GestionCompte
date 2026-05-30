@@ -40,7 +40,11 @@ class ProjectionEngine:
             y, m = month_date.year, month_date.month
 
             income = self.overrides.get('income', self.monthly_income) + self._yearly_for_month(y, m, 'income')
-            expenses = self.overrides.get('expenses', self.monthly_expenses) + self._yearly_for_month(y, m, 'expense')
+            expenses = (
+                self.overrides.get('expenses', self.monthly_expenses)
+                + self._yearly_for_month(y, m, 'expense')
+                + Decimal(str(self.overrides.get('extra_expenses', 0)))
+            )
             credits = self.overrides.get('credits', self.monthly_credits)
 
             net = income - expenses - credits
