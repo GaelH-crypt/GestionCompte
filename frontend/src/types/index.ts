@@ -80,6 +80,17 @@ export interface RecurringTransaction {
   created_at: string
 }
 
+export interface RecurringSuggestion {
+  name: string
+  amount: string
+  transaction_type: 'income' | 'expense'
+  frequency: Frequency
+  next_occurrence: string
+  occurrence_count: number
+  last_date: string
+  account: number
+}
+
 // ─── Credits ───────────────────────────────────────────────────────────────
 
 export type CreditType = 'mortgage' | 'auto' | 'consumer' | 'other'

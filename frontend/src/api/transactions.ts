@@ -1,5 +1,5 @@
 import client from './client'
-import type { Transaction, PaginatedResponse } from '@/types'
+import type { Transaction, PaginatedResponse, RecurringSuggestion } from '@/types'
 
 export const transactionsApi = {
   list: (params?: Record<string, string | number>) =>
@@ -12,4 +12,6 @@ export const transactionsApi = {
     client.patch<Transaction>(`/transactions/${id}/`, data),
   delete: (id: number) =>
     client.delete(`/transactions/${id}/`),
+  detectRecurring: () =>
+    client.get<RecurringSuggestion[]>('/transactions/detect-recurring/'),
 }
