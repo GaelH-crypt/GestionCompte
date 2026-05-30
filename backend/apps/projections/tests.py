@@ -1,4 +1,5 @@
 from decimal import Decimal
+from datetime import date, timedelta
 from django.test import TestCase
 
 
@@ -30,3 +31,28 @@ class ProjectionEngineTest(TestCase):
         result = engine.project(months=1)
         # 1000 + (3000 - 1000 - 0) = 3000
         self.assertAlmostEqual(result[0]['balance'], 3000.0, places=1)
+
+    def test_daily_projection_places_events_on_real_dates(self):
+        from apps.projections.engine import ProjectionEngine
+        today = date.today()
+        events = [
+            {'date': today + timedelta(days=2), 'amount': Decimal('2000'), 'kind': 'income'},
+            {'date': today + timedelta(days=4), 'amount': Decimal('800'), 'kind': 'expenses'},
+            {'date': today + timedelta(days=4), 'amount': Decimal('400'), 'kind': 'credits'},
+        ]
+        engine = ProjectionEngine(
+            current_balance=Decimal('1000'),
+            monthly_income=Decimal('0'),
+            monthly_expenses=Decimal('0'),
+            monthly_credits=Decimal('0'),
+            daily_events=events,
+        )
+        result = engine.project_daily(days=5)
+        self.assertEqual(len(result), 5)
+        # Day 1: no event yet → unchanged.
+        self.assertAlmostEqual(result[0]['balance'], 1000.0, places=1)
+        # Day 2: +2000 income.
+        self.assertAlmostEqual(result[1]['balance'], 3000.0, places=1)
+        # Day 4: -800 expense -400 credit.
+        self.assertAlmostEqual(result[3]['balance'], 1800.0, places=1)
+        self.assertAlmostEqual(result[3]['net'], -1200.0, places=1)

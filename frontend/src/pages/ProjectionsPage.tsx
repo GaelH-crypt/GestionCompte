@@ -27,10 +27,11 @@ export default function ProjectionsPage() {
 
   if (isLoading || !data) return <PageSpinner />
 
+  const isDaily = months === 1
   const first = data[0]
   const last = data[data.length - 1]
   const startBalance = first.balance - first.net
-  const negativeMonths = data.filter((d) => d.balance < 0).length
+  const negativeCount = data.filter((d) => d.balance < 0).length
   const minBalance = Math.min(...data.map((d) => d.balance))
 
   return (
@@ -53,12 +54,13 @@ export default function ProjectionsPage() {
       </div>
 
       {/* Alert */}
-      {negativeMonths > 0 && (
+      {negativeCount > 0 && (
         <div className="flex items-start gap-3 bg-red-900/20 border border-red-800 rounded-xl p-4">
           <AlertTriangle className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
           <p className="text-sm text-red-300">
             Attention : votre solde deviendra négatif pendant{' '}
-            <strong>{negativeMonths} mois</strong> sur cette période. Solde minimum prévu :{' '}
+            <strong>{negativeCount} {isDaily ? 'jour' : 'mois'}{isDaily && negativeCount > 1 ? 's' : ''}</strong>{' '}
+            sur cette période. Solde minimum prévu :{' '}
             <strong>{formatEur(minBalance)}</strong>.
           </p>
         </div>
@@ -107,13 +109,15 @@ export default function ProjectionsPage() {
       {/* Monthly table */}
       <Card padding={false}>
         <div className="p-6 border-b border-gray-800">
-          <h3 className="text-base font-semibold text-gray-100">Détail mensuel</h3>
+          <h3 className="text-base font-semibold text-gray-100">
+            {isDaily ? 'Détail journalier' : 'Détail mensuel'}
+          </h3>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-800">
-                {['Mois', 'Revenus', 'Dépenses', 'Crédits', 'Net mensuel', 'Solde cumulé'].map((h) => (
+                {[isDaily ? 'Jour' : 'Mois', 'Revenus', 'Dépenses', 'Crédits', isDaily ? 'Net du jour' : 'Net mensuel', 'Solde cumulé'].map((h) => (
                   <th key={h} className="text-left text-xs text-gray-500 font-medium px-6 py-3">
                     {h}
                   </th>
@@ -127,11 +131,17 @@ export default function ProjectionsPage() {
                   className={`border-b border-gray-800/50 ${row.balance < 0 ? 'bg-red-900/10' : ''}`}
                 >
                   <td className="px-6 py-3 text-sm text-gray-300 font-medium">{row.month}</td>
-                  <td className="px-6 py-3 text-sm text-green-400">+{formatEur(row.income)}</td>
-                  <td className="px-6 py-3 text-sm text-red-400">-{formatEur(row.expenses)}</td>
-                  <td className="px-6 py-3 text-sm text-orange-400">-{formatEur(row.credits)}</td>
+                  <td className="px-6 py-3 text-sm text-green-400">
+                    {row.income ? `+${formatEur(row.income)}` : <span className="text-gray-600">—</span>}
+                  </td>
+                  <td className="px-6 py-3 text-sm text-red-400">
+                    {row.expenses ? `-${formatEur(row.expenses)}` : <span className="text-gray-600">—</span>}
+                  </td>
+                  <td className="px-6 py-3 text-sm text-orange-400">
+                    {row.credits ? `-${formatEur(row.credits)}` : <span className="text-gray-600">—</span>}
+                  </td>
                   <td className={`px-6 py-3 text-sm font-medium ${row.net >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {row.net >= 0 ? '+' : ''}{formatEur(row.net)}
+                    {row.net ? `${row.net >= 0 ? '+' : ''}${formatEur(row.net)}` : <span className="text-gray-600">—</span>}
                   </td>
                   <td className={`px-6 py-3 text-sm font-bold ${row.balance >= 0 ? 'text-white' : 'text-red-400'}`}>
                     {formatEur(row.balance)}

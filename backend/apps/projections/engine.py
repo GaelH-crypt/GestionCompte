@@ -1,5 +1,5 @@
 from decimal import Decimal
-from datetime import date
+from datetime import date, timedelta
 from dateutil.relativedelta import relativedelta
 
 # Maximum horizon we pre-generate yearly occurrences for (matches the UI's max of 60 months).
@@ -11,13 +11,17 @@ class ProjectionEngine:
 
     def __init__(self, current_balance: Decimal, monthly_income: Decimal,
                  monthly_expenses: Decimal, monthly_credits: Decimal,
-                 yearly_events: list = None, overrides: dict = None):
+                 yearly_events: list = None, overrides: dict = None,
+                 daily_events: list = None):
         self.current_balance = Decimal(str(current_balance))
         self.monthly_income = Decimal(str(monthly_income))
         self.monthly_expenses = Decimal(str(monthly_expenses))
         self.monthly_credits = Decimal(str(monthly_credits))
         # yearly_events: [{'year': int, 'month': int, 'amount': Decimal, 'type': 'income'|'expense'}]
         self.yearly_events = yearly_events or []
+        # daily_events: [{'date': date, 'amount': Decimal, 'kind': 'income'|'expenses'|'credits'}]
+        # Each cashflow placed on its real day, for fine-grained day-by-day projection.
+        self.daily_events = daily_events or []
         self.overrides = overrides or {}
 
     def _yearly_for_month(self, year: int, month: int, tx_type: str) -> Decimal:
@@ -45,6 +49,44 @@ class ProjectionEngine:
             result.append({
                 'month': month_date.strftime('%b %Y'),
                 'date': month_date.isoformat(),
+                'income': float(income),
+                'expenses': float(expenses),
+                'credits': float(credits),
+                'net': float(net),
+                'balance': float(balance),
+            })
+
+        return result
+
+    def project_daily(self, days: int) -> list:
+        """Day-by-day projection: each cashflow lands on its real date, so the
+        balance reflects intra-month fluctuations rather than a smoothed total."""
+        balance = self.current_balance
+        today = date.today()
+
+        by_date = {}
+        for e in self.daily_events:
+            bucket = by_date.setdefault(
+                e['date'],
+                {'income': Decimal('0'), 'expenses': Decimal('0'), 'credits': Decimal('0')},
+            )
+            bucket[e['kind']] += e['amount']
+
+        result = []
+        for i in range(days):
+            day = today + timedelta(days=i + 1)
+            b = by_date.get(day)
+            income = b['income'] if b else Decimal('0')
+            expenses = b['expenses'] if b else Decimal('0')
+            credits = b['credits'] if b else Decimal('0')
+
+            net = income - expenses - credits
+            balance += net
+
+            result.append({
+                # Compact day label (e.g. "30/05"), reused as the chart X axis key.
+                'month': day.strftime('%d/%m'),
+                'date': day.isoformat(),
                 'income': float(income),
                 'expenses': float(expenses),
                 'credits': float(credits),
@@ -119,6 +161,41 @@ def build_engine_from_user(user, overrides: dict = None) -> ProjectionEngine:
     )
     monthly_credits = (credit_agg['p'] or Decimal('0')) + (credit_agg['ins'] or Decimal('0'))
 
+    # Day-by-day cashflow events for the fine-grained (1-month) projection: place
+    # every recurrence and credit charge on its real date. ~2 months covers the
+    # longest "1 mois" window with margin.
+    daily_end = today + timedelta(days=62)
+    daily_events = []
+
+    _freq_step = {
+        'weekly': relativedelta(weeks=1),
+        'monthly': relativedelta(months=1),
+        'yearly': relativedelta(years=1),
+    }
+    for rt in RecurringTransaction.objects.filter(user=user, is_active=True):
+        step = _freq_step.get(rt.frequency)
+        if step is None:
+            continue
+        kind = 'income' if rt.transaction_type == 'income' else 'expenses'
+        occ = rt.next_occurrence
+        # Catch up past occurrences to the projection window without emitting them.
+        while occ <= today:
+            occ = occ + step
+        while occ <= daily_end:
+            daily_events.append({'date': occ, 'amount': rt.amount, 'kind': kind})
+            occ = occ + step
+
+    # Credits not already covered by a recurring expense (same rule as monthly_credits),
+    # charged on their start-date day-of-month each month within the window.
+    for credit in Credit.objects.filter(
+        user=user, is_active=True
+    ).exclude(id__in=covered_credit_ids):
+        amount = (credit.monthly_payment or Decimal('0')) + (credit.insurance_monthly or Decimal('0'))
+        if amount == 0:
+            continue
+        for pay_date in _monthly_charge_dates(credit.start_date.day, today, daily_end):
+            daily_events.append({'date': pay_date, 'amount': amount, 'kind': 'credits'})
+
     decimal_overrides = {}
     if overrides:
         for k, v in overrides.items():
@@ -132,4 +209,19 @@ def build_engine_from_user(user, overrides: dict = None) -> ProjectionEngine:
         monthly_credits=monthly_credits,
         yearly_events=yearly_events,
         overrides=decimal_overrides,
+        daily_events=daily_events,
     )
+
+
+def _monthly_charge_dates(day_of_month: int, start: date, end: date) -> list:
+    """Dates falling on `day_of_month` (clamped to month length) within (start, end]."""
+    import calendar
+    dates = []
+    cursor = date(start.year, start.month, 1)
+    while cursor <= end:
+        last_day = calendar.monthrange(cursor.year, cursor.month)[1]
+        d = date(cursor.year, cursor.month, min(day_of_month, last_day))
+        if start < d <= end:
+            dates.append(d)
+        cursor = cursor + relativedelta(months=1)
+    return dates

@@ -27,7 +27,12 @@ export function ProjectionChart({ data, showBaseline = false }: ProjectionChartP
           </linearGradient>
         </defs>
         <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-        <XAxis dataKey="month" tick={{ fill: '#6b7280', fontSize: 11 }} />
+        <XAxis
+          dataKey="month"
+          tick={{ fill: '#6b7280', fontSize: 11 }}
+          interval="preserveStartEnd"
+          minTickGap={24}
+        />
         <YAxis
           tick={{ fill: '#6b7280', fontSize: 11 }}
           tickFormatter={(v) => `${(v / 1000).toFixed(0)}k€`}
