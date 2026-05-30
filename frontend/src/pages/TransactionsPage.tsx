@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Plus, Trash2, Pencil, Search, Upload,
-  ArrowUpCircle, ArrowDownCircle, ArrowLeftRight,
+  ArrowUpCircle, ArrowDownCircle, ArrowLeftRight, RefreshCw,
 } from 'lucide-react'
 import { transactionsApi } from '@/api/transactions'
 import { recurringApi } from '@/api/recurring'
@@ -15,7 +15,7 @@ import { PageSpinner } from '@/components/ui/Spinner'
 import { ImportWizard } from '@/components/ImportWizard/ImportWizard'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import type { Transaction, TransactionType, Frequency } from '@/types'
+import type { Transaction, TransactionType, Frequency, RecurringSuggestion } from '@/types'
 
 const formatEur = (n: number | string) =>
   new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(parseFloat(String(n)))
@@ -104,6 +104,7 @@ export default function TransactionsPage() {
   const [editing, setEditing] = useState<Transaction | null>(null)
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
+  const [showDetect, setShowDetect] = useState(false)
   const [page, setPage] = useState(1)
   const { widths, startResize, total } = useColumnWidths()
 
@@ -159,6 +160,9 @@ export default function TransactionsPage() {
         <div className="flex gap-2">
           <Button variant="secondary" onClick={() => setShowImport(true)}>
             <Upload className="h-4 w-4" /> Importer
+          </Button>
+          <Button variant="secondary" onClick={() => setShowDetect(true)}>
+            <RefreshCw className="h-4 w-4" /> Détecter les récurrentes
           </Button>
           <Button onClick={() => { setEditing(null); setShowForm(true) }}>
             <Plus className="h-4 w-4" /> Nouvelle transaction
@@ -279,6 +283,10 @@ export default function TransactionsPage() {
             qc.invalidateQueries({ queryKey: ['recurring'] })
           }}
         />
+      )}
+
+      {showDetect && (
+        <DetectRecurringModal onClose={() => setShowDetect(false)} />
       )}
 
       <ImportWizard
@@ -487,6 +495,116 @@ function TransactionFormModal({
             </Button>
           </div>
         </form>
+      </div>
+    </div>
+  )
+}
+
+function DetectRecurringModal({ onClose }: { onClose: () => void }) {
+  const qc = useQueryClient()
+  const [suggestions, setSuggestions] = useState<RecurringSuggestion[] | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [adding, setAdding] = useState<number | null>(null)
+
+  useEffect(() => {
+    transactionsApi.detectRecurring()
+      .then((r) => setSuggestions(r.data))
+      .catch(() => setSuggestions([]))
+      .finally(() => setLoading(false))
+  }, [])
+
+  async function handleAdd(s: RecurringSuggestion, idx: number) {
+    setAdding(idx)
+    try {
+      await recurringApi.create({
+        name: s.name,
+        amount: s.amount,
+        transaction_type: s.transaction_type,
+        frequency: s.frequency,
+        next_occurrence: s.next_occurrence,
+        account: s.account,
+      })
+      qc.invalidateQueries({ queryKey: ['recurring'] })
+      qc.invalidateQueries({ queryKey: ['projections'] })
+      setSuggestions((prev) => prev!.filter((_, i) => i !== idx))
+    } finally {
+      setAdding(null)
+    }
+  }
+
+  function handleIgnore(idx: number) {
+    setSuggestions((prev) => prev!.filter((_, i) => i !== idx))
+  }
+
+  const FREQ_LABELS: Record<Frequency, string> = {
+    weekly: 'Hebdo',
+    monthly: 'Mensuel',
+    yearly: 'Annuel',
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+      <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-lg p-6 flex flex-col gap-4 max-h-[85vh]">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-white">Transactions récurrentes détectées</h2>
+          <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors">✕</button>
+        </div>
+
+        {loading && (
+          <p className="text-sm text-gray-400 text-center py-8">Analyse en cours…</p>
+        )}
+
+        {!loading && suggestions !== null && suggestions.length === 0 && (
+          <p className="text-sm text-gray-400 text-center py-8">
+            Aucun nouveau pattern détecté. Tous vos flux récurrents sont déjà enregistrés.
+          </p>
+        )}
+
+        {!loading && suggestions !== null && suggestions.length > 0 && (
+          <div className="overflow-y-auto flex flex-col gap-2">
+            <p className="text-xs text-gray-500">{suggestions.length} pattern{suggestions.length > 1 ? 's' : ''} trouvé{suggestions.length > 1 ? 's' : ''}</p>
+            {suggestions.map((s, idx) => (
+              <div
+                key={idx}
+                className="flex items-center gap-3 bg-gray-800/50 rounded-xl px-4 py-3"
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-100 truncate">{s.name}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {FREQ_LABELS[s.frequency]} · {s.occurrence_count} occurrences
+                  </p>
+                </div>
+                <span
+                  className={`text-sm font-semibold whitespace-nowrap ${
+                    s.transaction_type === 'income' ? 'text-green-400' : 'text-red-400'
+                  }`}
+                >
+                  {s.transaction_type === 'income' ? '+' : '-'}
+                  {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(parseFloat(s.amount))}
+                </span>
+                <div className="flex gap-1 flex-shrink-0">
+                  <button
+                    onClick={() => handleAdd(s, idx)}
+                    disabled={adding === idx}
+                    className="px-3 py-1 text-xs font-medium bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white rounded-lg transition-colors"
+                  >
+                    {adding === idx ? '…' : 'Ajouter'}
+                  </button>
+                  <button
+                    onClick={() => handleIgnore(idx)}
+                    className="px-3 py-1 text-xs font-medium text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+                  >
+                    Ignorer
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <Button variant="secondary" onClick={onClose} className="mt-2">
+          Fermer
+        </Button>
       </div>
     </div>
   )
