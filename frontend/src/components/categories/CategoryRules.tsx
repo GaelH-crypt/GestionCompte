@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Trash2, Zap } from 'lucide-react'
 import { categoriesApi } from '@/api/categories'
@@ -26,6 +26,9 @@ export function CategoryRules({ categories }: Props) {
   const [categoryId, setCategoryId] = useState('')
   const [applyMsg, setApplyMsg] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const applyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => () => { if (applyTimerRef.current) clearTimeout(applyTimerRef.current) }, [])
 
   const { data: rules = [] } = useQuery({
     queryKey: ['category-rules'],
@@ -62,7 +65,8 @@ export function CategoryRules({ categories }: Props) {
     onSuccess: (res) => {
       const n = res.data.applied
       setApplyMsg(`${n} transaction${n !== 1 ? 's' : ''} catégorisée${n !== 1 ? 's' : ''}`)
-      setTimeout(() => setApplyMsg(null), 4000)
+      if (applyTimerRef.current) clearTimeout(applyTimerRef.current)
+      applyTimerRef.current = setTimeout(() => setApplyMsg(null), 4000)
       setError(null)
       qc.invalidateQueries({ queryKey: ['transactions'] })
     },

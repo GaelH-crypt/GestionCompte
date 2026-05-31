@@ -131,18 +131,20 @@ def sync_bank_account(bank_account: BankAccount, linked_account_id: int | None =
             seen_external_ids.add(external_id)
 
     added = 0
+    created_ids: list[int] = []
     try:
         with db_transaction.atomic():
             if to_create:
                 created = Transaction.objects.bulk_create(to_create, ignore_conflicts=True)
-                added = len(created)
                 created_ids = [tx.id for tx in created if tx.id]
-                if created_ids:
-                    apply_rules(user, Transaction.objects.filter(id__in=created_ids))
+                added = len(created_ids)
 
             bank_account.last_synced_at = timezone.now()
             bank_account.linked_account = app_account
             bank_account.save(update_fields=['last_synced_at', 'linked_account'])
+
+        if created_ids:
+            apply_rules(user, Transaction.objects.filter(id__in=created_ids))
 
         SyncLog.objects.create(
             bank_account=bank_account,

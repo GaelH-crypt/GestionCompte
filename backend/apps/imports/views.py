@@ -186,7 +186,10 @@ class ConfirmView(APIView):
                 created_transactions += 1
 
         if created_ids:
-            apply_rules(request.user, Transaction.objects.filter(id__in=created_ids))
+            try:
+                apply_rules(request.user, Transaction.objects.filter(id__in=created_ids))
+            except Exception:
+                pass
 
         return Response({
             'created_accounts': created_accounts,
