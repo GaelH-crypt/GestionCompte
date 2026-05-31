@@ -46,6 +46,8 @@ export function ExpensesChart({ data }: ExpensesChartProps) {
               borderRadius: '8px',
               fontSize: '12px',
             }}
+            itemStyle={{ color: '#f3f4f6' }}
+            labelStyle={{ color: '#9ca3af' }}
             formatter={(v: number) => [formatEur(v), '']}
           />
         </PieChart>
