@@ -25,6 +25,7 @@ export function CategoryRules({ categories }: Props) {
   const [matchType, setMatchType] = useState<CategoryRule['match_type']>('contains')
   const [categoryId, setCategoryId] = useState('')
   const [applyMsg, setApplyMsg] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   const { data: rules = [] } = useQuery({
     queryKey: ['category-rules'],
@@ -42,12 +43,18 @@ export function CategoryRules({ categories }: Props) {
       qc.invalidateQueries({ queryKey: ['category-rules'] })
       setPattern('')
       setCategoryId('')
+      setError(null)
     },
+    onError: () => setError('Erreur lors de la création de la règle.'),
   })
 
   const deleteMut = useMutation({
     mutationFn: (id: number) => categoriesApi.rules.delete(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['category-rules'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['category-rules'] })
+      setError(null)
+    },
+    onError: () => setError('Erreur lors de la suppression.'),
   })
 
   const applyMut = useMutation({
@@ -56,7 +63,9 @@ export function CategoryRules({ categories }: Props) {
       const n = res.data.applied
       setApplyMsg(`${n} transaction${n !== 1 ? 's' : ''} catégorisée${n !== 1 ? 's' : ''}`)
       setTimeout(() => setApplyMsg(null), 4000)
+      setError(null)
     },
+    onError: () => setError('Erreur lors de l\'application des règles.'),
   })
 
   const canAdd = pattern.trim().length > 0 && categoryId !== ''
@@ -78,6 +87,10 @@ export function CategoryRules({ categories }: Props) {
 
       {applyMsg && (
         <p className="text-sm text-green-400 mb-3">{applyMsg}</p>
+      )}
+
+      {error && (
+        <p className="text-sm text-red-400 mb-3">{error}</p>
       )}
 
       {rules.length > 0 && (
