@@ -5,6 +5,7 @@ import { categoriesApi } from '@/api/categories'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { PageSpinner } from '@/components/ui/Spinner'
+import { CategoryRules } from '@/components/categories/CategoryRules'
 
 const inp = 'bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-brand-500'
 
@@ -227,6 +228,8 @@ export default function CategoriesPage() {
           </div>
         )}
       </div>
+
+      <CategoryRules categories={categories} />
     </div>
   )
 }

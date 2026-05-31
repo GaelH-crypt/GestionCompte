@@ -6,6 +6,7 @@ from django.utils import timezone
 
 from apps.bank_sync.models import BankAccount, SyncLog
 from apps.categories.models import Category
+from apps.categories.rules import apply_rules
 from apps.transactions.models import Transaction
 from apps.imports.services.categorizer import suggest_category
 from apps.bank_sync.services import gocardless
@@ -133,8 +134,11 @@ def sync_bank_account(bank_account: BankAccount, linked_account_id: int | None =
     try:
         with db_transaction.atomic():
             if to_create:
-                Transaction.objects.bulk_create(to_create, ignore_conflicts=True)
-                added = len(to_create)
+                created = Transaction.objects.bulk_create(to_create, ignore_conflicts=True)
+                added = len(created)
+                created_ids = [tx.id for tx in created if tx.id]
+                if created_ids:
+                    apply_rules(user, Transaction.objects.filter(id__in=created_ids))
 
             bank_account.last_synced_at = timezone.now()
             bank_account.linked_account = app_account

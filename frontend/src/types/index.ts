@@ -36,6 +36,16 @@ export interface Category {
   created_at: string
 }
 
+export interface CategoryRule {
+  id: number
+  pattern: string
+  match_type: 'contains' | 'starts_with' | 'exact'
+  category: number
+  category_name: string
+  order: number
+  created_at: string
+}
+
 // ─── Transactions ──────────────────────────────────────────────────────────
 
 export type TransactionType = 'income' | 'expense' | 'transfer'
