@@ -85,9 +85,14 @@ class ProjectionEngine:
         for e in self.daily_events:
             bucket = by_date.setdefault(
                 e['date'],
-                {'income': Decimal('0'), 'expenses': Decimal('0'), 'credits': Decimal('0')},
+                {'income': Decimal('0'), 'expenses': Decimal('0'), 'credits': Decimal('0'), 'events': []},
             )
             bucket[e['kind']] += e['amount']
+            bucket['events'].append({
+                'label': e.get('label', ''),
+                'amount': float(e['amount']),
+                'kind': e['kind'],
+            })
 
         result = []
         for i in range(days):
@@ -109,6 +114,7 @@ class ProjectionEngine:
                 'credits': float(credits),
                 'net': float(net),
                 'balance': float(balance),
+                'events': b['events'] if b else [],
             })
 
         return result
@@ -199,7 +205,7 @@ def build_engine_from_user(user, overrides: dict = None) -> ProjectionEngine:
         while occ <= today:
             occ = occ + step
         while occ <= daily_end:
-            daily_events.append({'date': occ, 'amount': rt.amount, 'kind': kind})
+            daily_events.append({'date': occ, 'amount': rt.amount, 'kind': kind, 'label': rt.name})
             occ = occ + step
 
     # Credits not already covered by a recurring expense (same rule as monthly_credits),
@@ -211,7 +217,7 @@ def build_engine_from_user(user, overrides: dict = None) -> ProjectionEngine:
         if amount == 0:
             continue
         for pay_date in _monthly_charge_dates(credit.start_date.day, today, daily_end):
-            daily_events.append({'date': pay_date, 'amount': amount, 'kind': 'credits'})
+            daily_events.append({'date': pay_date, 'amount': amount, 'kind': 'credits', 'label': credit.name})
 
     decimal_overrides = {}
     if overrides:
