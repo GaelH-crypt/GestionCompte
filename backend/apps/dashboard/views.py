@@ -7,6 +7,7 @@ from rest_framework.response import Response
 
 from apps.accounts.models import Account
 from apps.accounts.services import get_account_balance
+from apps.categories.models import Category
 from apps.transactions.models import Transaction
 from apps.credits.models import Credit
 from apps.recurring.models import RecurringTransaction
@@ -43,13 +44,32 @@ def dashboard_summary(request):
     recurring = RecurringTransaction.objects.filter(user=user, is_active=True, transaction_type='expense')
     total_recurring = float(recurring.aggregate(t=Sum('amount'))['t'] or 0)
 
+    cat_map = {c.id: c for c in Category.objects.filter(user=user).select_related('parent')}
+
+    def get_root(cat_id: int) -> Category | None:
+        seen = set()
+        cat = cat_map.get(cat_id)
+        while cat and cat.parent_id:
+            if cat.parent_id in seen:
+                break
+            seen.add(cat.parent_id)
+            cat = cat_map.get(cat.parent_id)
+        return cat
+
     by_category = month_transactions.filter(
         transaction_type='expense', category__isnull=False
-    ).values('category__name', 'category__color').annotate(total=Sum('amount')).order_by('-total')
-    expenses_by_category = [
-        {'name': r['category__name'], 'color': r['category__color'], 'amount': float(r['total'])}
-        for r in by_category
-    ]
+    ).values('category_id').annotate(total=Sum('amount'))
+
+    category_totals: dict[str, dict] = {}
+    for r in by_category:
+        root = get_root(r['category_id'])
+        if root is None:
+            continue
+        if root.name not in category_totals:
+            category_totals[root.name] = {'name': root.name, 'color': root.color, 'amount': 0.0}
+        category_totals[root.name]['amount'] += float(r['total'])
+
+    expenses_by_category = sorted(category_totals.values(), key=lambda x: x['amount'], reverse=True)
 
     cutoff = today + timedelta(days=30)
     upcoming_recurring = list(

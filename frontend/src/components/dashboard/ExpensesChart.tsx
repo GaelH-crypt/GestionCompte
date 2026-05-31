@@ -1,4 +1,4 @@
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { Card, CardTitle } from '@/components/ui/Card'
 import type { ExpenseByCategory } from '@/types'
 
@@ -18,10 +18,13 @@ export function ExpensesChart({ data }: ExpensesChartProps) {
       </Card>
     )
   }
+
+  const total = data.reduce((sum, d) => sum + d.amount, 0)
+
   return (
     <Card>
       <CardTitle>Dépenses par catégorie</CardTitle>
-      <ResponsiveContainer width="100%" height={260}>
+      <ResponsiveContainer width="100%" height={210}>
         <PieChart>
           <Pie
             data={data.map((d) => ({ ...d, value: d.amount }))}
@@ -43,13 +46,26 @@ export function ExpensesChart({ data }: ExpensesChartProps) {
               borderRadius: '8px',
               fontSize: '12px',
             }}
-            formatter={(v: number) => [formatEur(v), '']}
-          />
-          <Legend
-            formatter={(v) => <span style={{ color: '#9ca3af', fontSize: '12px' }}>{v}</span>}
+            itemStyle={{ color: '#f3f4f6' }}
+            labelStyle={{ color: '#9ca3af' }}
+            formatter={(v: number, _key: string, props) => [formatEur(v), props.payload?.name ?? '']}
           />
         </PieChart>
       </ResponsiveContainer>
+      <div className="mt-3 space-y-1.5 max-h-36 overflow-y-auto">
+        {data.map((entry, i) => (
+          <div key={i} className="flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: entry.color }} />
+              <span className="text-gray-400 truncate">{entry.name}</span>
+            </div>
+            <div className="flex items-center gap-3 flex-shrink-0 ml-2">
+              <span className="text-gray-200 font-medium">{formatEur(entry.amount)}</span>
+              <span className="text-gray-500 w-8 text-right">{((entry.amount / total) * 100).toFixed(0)}%</span>
+            </div>
+          </div>
+        ))}
+      </div>
     </Card>
   )
 }
