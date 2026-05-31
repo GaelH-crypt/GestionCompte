@@ -121,3 +121,60 @@ class ApplyRulesTest(TestCase):
         self.assertEqual(count, 0)
         tx.refresh_from_db()
         self.assertIsNone(tx.category)
+
+
+class CategoryRuleAPITest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user('ruleapi', password='pass')
+        self.client.force_authenticate(user=self.user)
+        self.cat = Category.objects.create(user=self.user, name='Transport', color='#f00', icon='Tag')
+
+    def test_create_rule(self):
+        resp = self.client.post('/api/categories/rules/', {
+            'pattern': 'CARBURANT',
+            'match_type': 'contains',
+            'category': self.cat.id,
+            'order': 0,
+        })
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(resp.data['pattern'], 'CARBURANT')
+        self.assertEqual(resp.data['category_name'], 'Transport')
+
+    def test_list_rules_own_only(self):
+        other = User.objects.create_user('other2', password='pass')
+        other_cat = Category.objects.create(user=other, name='Other', color='#fff', icon='Tag')
+        from apps.categories.models import CategoryRule
+        CategoryRule.objects.create(user=other, pattern='XXX', match_type='contains', category=other_cat, order=0)
+        CategoryRule.objects.create(user=self.user, pattern='YYY', match_type='contains', category=self.cat, order=0)
+        resp = self.client.get('/api/categories/rules/')
+        self.assertEqual(resp.status_code, 200)
+        patterns = [r['pattern'] for r in resp.data]
+        self.assertIn('YYY', patterns)
+        self.assertNotIn('XXX', patterns)
+
+    def test_delete_rule(self):
+        from apps.categories.models import CategoryRule
+        rule = CategoryRule.objects.create(user=self.user, pattern='DEL', match_type='exact', category=self.cat, order=0)
+        resp = self.client.delete(f'/api/categories/rules/{rule.id}/')
+        self.assertEqual(resp.status_code, 204)
+        self.assertFalse(CategoryRule.objects.filter(id=rule.id).exists())
+
+    def test_apply_endpoint(self):
+        from apps.accounts.models import Account
+        from apps.transactions.models import Transaction
+        from apps.categories.models import CategoryRule
+        acc = Account.objects.create(
+            user=self.user, name='Compte', account_type='checking',
+            initial_balance=0, color='#000', icon='CreditCard',
+        )
+        CategoryRule.objects.create(user=self.user, pattern='SHELL', match_type='contains', category=self.cat, order=0)
+        tx = Transaction.objects.create(
+            user=self.user, account=acc, transaction_type='expense',
+            amount='30.00', description='SHELL STATION', date='2026-05-01',
+        )
+        resp = self.client.post('/api/categories/rules/apply/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['applied'], 1)
+        tx.refresh_from_db()
+        self.assertEqual(tx.category, self.cat)
