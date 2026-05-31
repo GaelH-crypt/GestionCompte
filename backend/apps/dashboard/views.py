@@ -45,11 +45,24 @@ def dashboard_summary(request):
 
     by_category = month_transactions.filter(
         transaction_type='expense', category__isnull=False
-    ).values('category__name', 'category__color').annotate(total=Sum('amount')).order_by('-total')
-    expenses_by_category = [
-        {'name': r['category__name'], 'color': r['category__color'], 'amount': float(r['total'])}
-        for r in by_category
-    ]
+    ).values(
+        'category__name', 'category__color',
+        'category__parent__name', 'category__parent__color',
+    ).annotate(total=Sum('amount'))
+
+    category_totals: dict[str, dict] = {}
+    for r in by_category:
+        if r['category__parent__name']:
+            name = r['category__parent__name']
+            color = r['category__parent__color']
+        else:
+            name = r['category__name']
+            color = r['category__color']
+        if name not in category_totals:
+            category_totals[name] = {'name': name, 'color': color, 'amount': 0.0}
+        category_totals[name]['amount'] += float(r['total'])
+
+    expenses_by_category = sorted(category_totals.values(), key=lambda x: x['amount'], reverse=True)
 
     cutoff = today + timedelta(days=30)
     upcoming_recurring = list(
