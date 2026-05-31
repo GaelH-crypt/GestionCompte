@@ -69,6 +69,7 @@ export default function BottomNav() {
           <NavLink
             key={to}
             to={to}
+            onClick={() => setMoreOpen(false)}
             className={({ isActive }) =>
               clsx(
                 'flex flex-col items-center justify-center gap-1 flex-1 h-full text-xs font-medium transition-colors',
