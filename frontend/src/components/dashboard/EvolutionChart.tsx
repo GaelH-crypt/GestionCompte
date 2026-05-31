@@ -2,11 +2,41 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
 } from 'recharts'
+import type { TooltipProps } from 'recharts'
 import { Card, CardTitle } from '@/components/ui/Card'
 import type { ProjectionPoint } from '@/types'
 
 interface EvolutionChartProps {
   data: ProjectionPoint[]
+}
+
+const tooltipStyle = {
+  backgroundColor: '#111827',
+  border: '1px solid #374151',
+  borderRadius: '8px',
+  padding: '10px 12px',
+  fontSize: '12px',
+}
+
+function ChartTooltip({ active, payload, label }: TooltipProps<number, string>) {
+  if (!active || !payload?.[0]) return null
+  const point = payload[0].payload as ProjectionPoint
+  return (
+    <div style={tooltipStyle}>
+      <p style={{ color: '#9ca3af', marginBottom: '4px' }}>Jour : {label}</p>
+      <p style={{ color: '#fff', fontWeight: 600 }}>{formatEur(point.balance)}</p>
+      {point.events && point.events.length > 0 && (
+        <>
+          <hr style={{ borderColor: '#374151', margin: '6px 0' }} />
+          {point.events.map((e, i) => (
+            <p key={i} style={{ color: e.kind === 'income' ? '#4ade80' : '#f87171', margin: '2px 0' }}>
+              {e.label} : {e.kind === 'income' ? '+' : '-'}{formatEur(e.amount)}
+            </p>
+          ))}
+        </>
+      )}
+    </div>
+  )
 }
 
 const formatEur = (n: number) =>
@@ -37,16 +67,7 @@ export function EvolutionChart({ data }: EvolutionChartProps) {
             tick={{ fill: '#6b7280', fontSize: 11 }}
             tickFormatter={(v) => `${(v / 1000).toFixed(0)}k€`}
           />
-          <Tooltip
-            contentStyle={{
-              backgroundColor: '#111827',
-              border: '1px solid #374151',
-              borderRadius: '8px',
-              fontSize: '12px',
-            }}
-            formatter={(v: number) => [formatEur(v), 'Solde']}
-            labelFormatter={(label) => `Jour : ${label}`}
-          />
+          <Tooltip content={<ChartTooltip />} />
           <Area
             type="monotone"
             dataKey="balance"
