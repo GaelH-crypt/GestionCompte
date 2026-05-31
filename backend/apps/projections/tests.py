@@ -36,9 +36,9 @@ class ProjectionEngineTest(TestCase):
         from apps.projections.engine import ProjectionEngine
         today = date.today()
         events = [
-            {'date': today + timedelta(days=2), 'amount': Decimal('2000'), 'kind': 'income'},
-            {'date': today + timedelta(days=4), 'amount': Decimal('800'), 'kind': 'expenses'},
-            {'date': today + timedelta(days=4), 'amount': Decimal('400'), 'kind': 'credits'},
+            {'date': today + timedelta(days=2), 'amount': Decimal('2000'), 'kind': 'income', 'label': 'Salaire'},
+            {'date': today + timedelta(days=4), 'amount': Decimal('800'), 'kind': 'expenses', 'label': 'Loyer'},
+            {'date': today + timedelta(days=4), 'amount': Decimal('400'), 'kind': 'credits', 'label': 'Crédit auto'},
         ]
         engine = ProjectionEngine(
             current_balance=Decimal('1000'),
@@ -56,6 +56,49 @@ class ProjectionEngineTest(TestCase):
         # Day 4: -800 expense -400 credit.
         self.assertAlmostEqual(result[3]['balance'], 1800.0, places=1)
         self.assertAlmostEqual(result[3]['net'], -1200.0, places=1)
+
+    def test_daily_projection_events_field_contains_named_events(self):
+        from apps.projections.engine import ProjectionEngine
+        today = date.today()
+        events = [
+            {'date': today + timedelta(days=1), 'amount': Decimal('2500'), 'kind': 'income', 'label': 'Salaire'},
+            {'date': today + timedelta(days=3), 'amount': Decimal('850'), 'kind': 'expenses', 'label': 'Loyer'},
+            {'date': today + timedelta(days=3), 'amount': Decimal('200'), 'kind': 'credits', 'label': 'Crédit voiture'},
+        ]
+        engine = ProjectionEngine(
+            current_balance=Decimal('1000'),
+            monthly_income=Decimal('0'),
+            monthly_expenses=Decimal('0'),
+            monthly_credits=Decimal('0'),
+            daily_events=events,
+        )
+        result = engine.project_daily(days=5)
+        # Day 1 has one income event
+        self.assertEqual(len(result[0]['events']), 1)
+        self.assertEqual(result[0]['events'][0]['label'], 'Salaire')
+        self.assertAlmostEqual(result[0]['events'][0]['amount'], 2500.0, places=1)
+        self.assertEqual(result[0]['events'][0]['kind'], 'income')
+        # Day 3 has two events
+        self.assertEqual(len(result[2]['events']), 2)
+        labels = {e['label'] for e in result[2]['events']}
+        self.assertEqual(labels, {'Loyer', 'Crédit voiture'})
+        # Days without events have empty list
+        self.assertEqual(result[1]['events'], [])
+        self.assertEqual(result[4]['events'], [])
+
+    def test_daily_projection_override_days_have_no_events(self):
+        from apps.projections.engine import ProjectionEngine
+        engine = ProjectionEngine(
+            current_balance=Decimal('1000'),
+            monthly_income=Decimal('0'),
+            monthly_expenses=Decimal('0'),
+            monthly_credits=Decimal('0'),
+            daily_events=[],
+            overrides={'income': Decimal('300')},
+        )
+        result = engine.project_daily(days=3)
+        for point in result:
+            self.assertEqual(point['events'], [])
 
     def test_extra_expenses_override_reduces_balance(self):
         from apps.projections.engine import ProjectionEngine
