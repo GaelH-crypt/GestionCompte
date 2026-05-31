@@ -107,7 +107,7 @@ export default function BankSyncPage() {
   return (
     <div className="space-y-6 max-w-4xl">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-white">Synchronisation bancaire</h1>
           <p className="text-sm text-gray-400 mt-1">

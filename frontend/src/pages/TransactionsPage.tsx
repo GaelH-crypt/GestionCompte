@@ -136,7 +136,7 @@ export default function TransactionsPage() {
   return (
     <div className="space-y-4">
       {/* Filters */}
-      <div className="flex flex-wrap gap-3 items-center justify-between">
+      <div className="flex flex-col sm:flex-row flex-wrap gap-3 sm:items-center sm:justify-between">
         <div className="flex gap-3 flex-wrap">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
@@ -144,7 +144,7 @@ export default function TransactionsPage() {
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1) }}
               placeholder="Rechercher…"
-              className={`${sel} pl-9 w-56`}
+              className={`${sel} pl-9 w-full sm:w-56`}
             />
           </div>
           <select
@@ -172,7 +172,7 @@ export default function TransactionsPage() {
       </div>
 
       {/* Table */}
-      <Card padding={false}>
+      <Card padding={false} className="hidden md:block">
         <div className="overflow-x-auto">
           <table className="table-fixed" style={{ width: total }}>
             <colgroup>
@@ -271,6 +271,61 @@ export default function TransactionsPage() {
           </div>
         )}
       </Card>
+
+      {/* Cards mobile — masqué sur desktop */}
+      <div className="md:hidden space-y-2">
+        {(data?.results ?? []).map((tx) => (
+          <div key={tx.id} className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex flex-col gap-1.5">
+            <div className="flex items-center gap-2">
+              <span className="flex-shrink-0">{TYPE_ICON[tx.transaction_type]}</span>
+              <span className="flex-1 text-sm text-gray-200 truncate">{tx.description}</span>
+              <span className={`text-sm font-semibold whitespace-nowrap ${TYPE_COLOR[tx.transaction_type]}`}>
+                {tx.transaction_type === 'income' ? '+' : '-'}{formatEur(tx.amount)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between pl-6">
+              <span className="text-xs text-gray-400 truncate">
+                {tx.account_name}{tx.category_name ? ` · ${tx.category_name}` : ''}
+              </span>
+              <span className="text-xs text-gray-500 whitespace-nowrap ml-2">
+                {format(new Date(tx.date), 'd MMM yyyy', { locale: fr })}
+              </span>
+            </div>
+            <div className="flex gap-1 justify-end">
+              <button
+                onClick={() => { setEditing(tx); setShowForm(true) }}
+                className="p-1.5 text-gray-500 hover:text-white hover:bg-gray-800 rounded-lg"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={() => deleteMut.mutate(tx.id)}
+                className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-900/20 rounded-lg"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        ))}
+        {(data?.results ?? []).length === 0 && (
+          <p className="text-center text-sm text-gray-500 py-8">Aucune transaction trouvée.</p>
+        )}
+        {data && (
+          <div className="flex items-center justify-between pt-2">
+            <p className="text-sm text-gray-500">
+              {data.count} transaction{data.count > 1 ? 's' : ''}
+            </p>
+            <div className="flex gap-2">
+              <Button size="sm" variant="secondary" disabled={!data.previous} onClick={() => setPage((p) => p - 1)}>
+                Précédent
+              </Button>
+              <Button size="sm" variant="secondary" disabled={!data.next} onClick={() => setPage((p) => p + 1)}>
+                Suivant
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
 
       {showForm && (
         <TransactionFormModal

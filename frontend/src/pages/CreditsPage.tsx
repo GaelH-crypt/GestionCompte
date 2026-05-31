@@ -66,7 +66,7 @@ export default function CreditsPage() {
   return (
     <div className="space-y-6">
       {/* Summary */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-1">
           <Card>
             <p className="text-sm text-gray-400">Mensualités totales</p>
