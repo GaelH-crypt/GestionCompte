@@ -48,7 +48,7 @@ export function ExpensesChart({ data }: ExpensesChartProps) {
             }}
             itemStyle={{ color: '#f3f4f6' }}
             labelStyle={{ color: '#9ca3af' }}
-            formatter={(v: number) => [formatEur(v), '']}
+            formatter={(v: number, _key: string, props) => [formatEur(v), props.payload?.name ?? '']}
           />
         </PieChart>
       </ResponsiveContainer>
