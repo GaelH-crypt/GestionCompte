@@ -23,6 +23,11 @@ function ChartTooltip({ active, payload, label }: TooltipProps<number, string>) 
     <div style={tooltipStyle}>
       <p style={{ color: '#9ca3af', marginBottom: '4px' }}>Jour : {label}</p>
       <p style={{ color: '#fff', fontWeight: 600 }}>{formatEur(point.balance)}</p>
+      {point.baseline_balance !== undefined && (
+        <p style={{ color: '#6b7280', fontSize: '11px', marginTop: '2px' }}>
+          Sans simulation : {formatEur(point.baseline_balance)}
+        </p>
+      )}
       {point.events && point.events.length > 0 && (
         <>
           <hr style={{ borderColor: '#374151', margin: '6px 0' }} />
