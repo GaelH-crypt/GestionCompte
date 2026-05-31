@@ -21,8 +21,6 @@ const tooltipStyle = {
 function ChartTooltip({ active, payload, label }: TooltipProps<number, string>) {
   if (!active || !payload?.[0]) return null
   const point = payload[0].payload as ProjectionPoint
-  const formatEur = (n: number) =>
-    new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(n)
   return (
     <div style={tooltipStyle}>
       <p style={{ color: '#9ca3af', marginBottom: '4px' }}>Jour : {label}</p>
