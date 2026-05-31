@@ -181,7 +181,8 @@ class ConfirmView(APIView):
                     note='',
                     tags=[],
                 )
-                created_ids.append(new_tx.id)
+                if category is None:
+                    created_ids.append(new_tx.id)
                 created_transactions += 1
 
         if created_ids:

@@ -64,6 +64,7 @@ export function CategoryRules({ categories }: Props) {
       setApplyMsg(`${n} transaction${n !== 1 ? 's' : ''} catégorisée${n !== 1 ? 's' : ''}`)
       setTimeout(() => setApplyMsg(null), 4000)
       setError(null)
+      qc.invalidateQueries({ queryKey: ['transactions'] })
     },
     onError: () => setError('Erreur lors de l\'application des règles.'),
   })
