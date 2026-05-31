@@ -13,6 +13,7 @@ from apps.imports.services.deduplicator import filter_duplicates
 from apps.accounts.models import Account
 from apps.transactions.models import Transaction
 from apps.categories.models import Category
+from apps.categories.rules import apply_rules
 
 
 class PreviewView(APIView):
@@ -114,6 +115,7 @@ class ConfirmView(APIView):
         categories_by_id = {c.id: c for c in Category.objects.filter(user=request.user)}
 
         skipped_ribs = []
+        created_ids = []
 
         def _norm(r: str) -> str:
             return r.replace(' ', '').upper()
@@ -167,7 +169,7 @@ class ConfirmView(APIView):
 
                 category = categories_by_id.get(tx.get('category_id'))
 
-                Transaction.objects.create(
+                new_tx = Transaction.objects.create(
                     user=request.user,
                     account=account,
                     transaction_type=tx['transaction_type'],
@@ -179,7 +181,11 @@ class ConfirmView(APIView):
                     note='',
                     tags=[],
                 )
+                created_ids.append(new_tx.id)
                 created_transactions += 1
+
+        if created_ids:
+            apply_rules(request.user, Transaction.objects.filter(id__in=created_ids))
 
         return Response({
             'created_accounts': created_accounts,
