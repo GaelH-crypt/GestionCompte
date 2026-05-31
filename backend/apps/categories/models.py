@@ -16,3 +16,24 @@ class Category(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class CategoryRule(models.Model):
+    MATCH_CHOICES = [
+        ('contains',    'Contient'),
+        ('starts_with', 'Commence par'),
+        ('exact',       'Exact'),
+    ]
+    user       = models.ForeignKey(User, on_delete=models.CASCADE, related_name='category_rules')
+    pattern    = models.CharField(max_length=200)
+    match_type = models.CharField(max_length=20, choices=MATCH_CHOICES, default='contains')
+    category   = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='rules')
+    order      = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['order', 'created_at']
+        unique_together = ('user', 'pattern', 'match_type')
+
+    def __str__(self):
+        return f'{self.pattern} ({self.match_type}) → {self.category}'
