@@ -2,10 +2,40 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts'
+import type { TooltipProps } from 'recharts'
 import type { ProjectionPoint } from '@/types'
 
 const formatEur = (n: number) =>
   new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(n)
+
+const tooltipStyle = {
+  backgroundColor: '#111827',
+  border: '1px solid #374151',
+  borderRadius: '8px',
+  padding: '10px 12px',
+  fontSize: '12px',
+}
+
+function ChartTooltip({ active, payload, label }: TooltipProps<number, string>) {
+  if (!active || !payload?.[0]) return null
+  const point = payload[0].payload as ProjectionPoint
+  return (
+    <div style={tooltipStyle}>
+      <p style={{ color: '#9ca3af', marginBottom: '4px' }}>Jour : {label}</p>
+      <p style={{ color: '#fff', fontWeight: 600 }}>{formatEur(point.balance)}</p>
+      {point.events && point.events.length > 0 && (
+        <>
+          <hr style={{ borderColor: '#374151', margin: '6px 0' }} />
+          {point.events.map((e, i) => (
+            <p key={i} style={{ color: e.kind === 'income' ? '#4ade80' : '#f87171', margin: '2px 0' }}>
+              {e.label} : {e.kind === 'income' ? '+' : '-'}{formatEur(e.amount)}
+            </p>
+          ))}
+        </>
+      )}
+    </div>
+  )
+}
 
 interface ProjectionChartProps {
   data: ProjectionPoint[]
@@ -37,15 +67,7 @@ export function ProjectionChart({ data, showBaseline = false }: ProjectionChartP
           tick={{ fill: '#6b7280', fontSize: 11 }}
           tickFormatter={(v) => `${(v / 1000).toFixed(0)}k€`}
         />
-        <Tooltip
-          contentStyle={{
-            backgroundColor: '#111827',
-            border: '1px solid #374151',
-            borderRadius: '8px',
-            fontSize: '12px',
-          }}
-          formatter={(v: number) => [formatEur(v), '']}
-        />
+        <Tooltip content={<ChartTooltip />} />
         <ReferenceLine y={0} stroke="#ef4444" strokeDasharray="4 4" strokeWidth={1} />
         {showBaseline && (
           <Area
