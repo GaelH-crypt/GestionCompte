@@ -60,10 +60,16 @@ def simulation_view(request):
             overrides['extra_expenses'] = total_extra
 
     engine = build_engine_from_user(request.user, overrides=overrides)
-    result = engine.project(months)
-
     baseline_engine = build_engine_from_user(request.user)
-    baseline = baseline_engine.project(months)
+
+    if months == 1:
+        today = date.today()
+        days = (today + relativedelta(months=1) - today).days
+        result = engine.project_daily(days)
+        baseline = baseline_engine.project_daily(days)
+    else:
+        result = engine.project(months)
+        baseline = baseline_engine.project(months)
 
     for i, row in enumerate(result):
         row['baseline_balance'] = baseline[i]['balance']

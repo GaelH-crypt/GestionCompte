@@ -65,6 +65,19 @@ class ProjectionEngine:
     def project_daily(self, days: int) -> list:
         """Day-by-day projection: each cashflow lands on its real date, so the
         balance reflects intra-month fluctuations rather than a smoothed total."""
+        days_d = Decimal(str(days))
+
+        # Override deltas: distribute (override - actual) evenly across days.
+        income_daily = (
+            self.overrides.get('income', self.monthly_income) - self.monthly_income
+        ) / days_d
+        expenses_delta = self.overrides.get('expenses', self.monthly_expenses) - self.monthly_expenses
+        extra = self.overrides.get('extra_expenses', Decimal('0'))
+        expenses_daily = (expenses_delta + extra) / days_d
+        credits_daily = (
+            self.overrides.get('credits', self.monthly_credits) - self.monthly_credits
+        ) / days_d
+
         balance = self.current_balance
         today = date.today()
 
@@ -80,9 +93,9 @@ class ProjectionEngine:
         for i in range(days):
             day = today + timedelta(days=i + 1)
             b = by_date.get(day)
-            income = b['income'] if b else Decimal('0')
-            expenses = b['expenses'] if b else Decimal('0')
-            credits = b['credits'] if b else Decimal('0')
+            income = (b['income'] if b else Decimal('0')) + income_daily
+            expenses = (b['expenses'] if b else Decimal('0')) + expenses_daily
+            credits = (b['credits'] if b else Decimal('0')) + credits_daily
 
             net = income - expenses - credits
             balance += net
@@ -203,7 +216,7 @@ def build_engine_from_user(user, overrides: dict = None) -> ProjectionEngine:
     decimal_overrides = {}
     if overrides:
         for k, v in overrides.items():
-            if k in ('income', 'expenses', 'credits') and v is not None:
+            if k in ('income', 'expenses', 'credits', 'extra_expenses') and v is not None:
                 decimal_overrides[k] = Decimal(str(v))
 
     return ProjectionEngine(

@@ -12,8 +12,8 @@ import type { ProjectionPoint, SimulationExpenseItem } from '@/types'
 const formatEur = (n: number) =>
   new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(n)
 
-const HORIZONS = [3, 6, 12, 60]
-const HORIZON_LABELS: Record<number, string> = { 3: '3 mois', 6: '6 mois', 12: '1 an', 60: '5 ans' }
+const HORIZONS = [1, 3, 6, 12, 60]
+const HORIZON_LABELS: Record<number, string> = { 1: '30 jours', 3: '3 mois', 6: '6 mois', 12: '1 an', 60: '5 ans' }
 
 function storageKey(userId: number | undefined) {
   return `simulation_extra_expenses_${userId ?? 'anon'}`
@@ -63,7 +63,7 @@ export default function SimulationsPage() {
     const amount = parseFloat(newAmount)
     if (!newLabel.trim() || isNaN(amount) || amount <= 0) return
     const item: SimulationExpenseItem = {
-      id: crypto.randomUUID(),
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2),
       label: newLabel.trim(),
       amount,
     }
