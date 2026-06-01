@@ -40,6 +40,21 @@ class AccountCreditFieldsTest(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data['account_type'], 'credit')
 
+    def test_patch_linked_credit_other_user_rejected(self):
+        """Cannot link to a credit belonging to another user."""
+        from apps.credits.models import Credit
+        import datetime
+        other_user = User.objects.create_user('other', password='p')
+        other_credit = Credit.objects.create(
+            user=other_user, name='Other Credit', credit_type='consumer',
+            initial_capital='5000', remaining_capital='4000', interest_rate='3',
+            monthly_payment='200', insurance_monthly='0', duration_months=24,
+            start_date=datetime.date(2024, 1, 1),
+        )
+        acc = self._make_account()
+        resp = self.client.patch(f'/api/accounts/{acc.id}/', {'linked_credit': other_credit.id}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
 
 class AccountAPITest(TestCase):
     def setUp(self):

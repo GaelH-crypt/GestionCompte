@@ -1,10 +1,16 @@
 from rest_framework import serializers
+from apps.credits.models import Credit
 from .models import Account
 from .services import get_account_balance
 
 
 class AccountSerializer(serializers.ModelSerializer):
     current_balance = serializers.SerializerMethodField()
+    linked_credit = serializers.PrimaryKeyRelatedField(
+        queryset=Credit.objects.none(),
+        allow_null=True,
+        required=False,
+    )
 
     class Meta:
         model = Account
@@ -14,6 +20,12 @@ class AccountSerializer(serializers.ModelSerializer):
             'created_at',
         )
         read_only_fields = ('id', 'created_at', 'current_balance')
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get('request')
+        if request:
+            self.fields['linked_credit'].queryset = Credit.objects.filter(user=request.user)
 
     def get_current_balance(self, obj):
         return get_account_balance(obj)
