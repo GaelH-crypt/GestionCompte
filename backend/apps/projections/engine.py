@@ -197,14 +197,12 @@ def build_engine_from_user(user, overrides: dict = None) -> ProjectionEngine:
     # 2. Heuristic (amount + type + account) — fallback for unlinked transactions.
     from apps.transactions.models import Transaction as _Tx
     first_of_month = today.replace(day=1)
-    _qs = _Tx.objects.filter(user=user, date__gte=first_of_month, date__lte=today)
-    _linked_this_month = set(
-        _qs.filter(recurring_transaction__isnull=False)
-        .values_list('recurring_transaction_id', flat=True)
+    _month_rows = list(
+        _Tx.objects.filter(user=user, date__gte=first_of_month, date__lte=today)
+        .values('amount', 'transaction_type', 'account_id', 'recurring_transaction_id')
     )
-    _paid_this_month = set(
-        _qs.values_list('amount', 'transaction_type', 'account_id')
-    )
+    _linked_this_month = {r['recurring_transaction_id'] for r in _month_rows if r['recurring_transaction_id']}
+    _paid_this_month = {(r['amount'], r['transaction_type'], r['account_id']) for r in _month_rows}
 
     _freq_step = {
         'weekly': relativedelta(weeks=1),

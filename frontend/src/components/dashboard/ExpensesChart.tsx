@@ -61,7 +61,7 @@ export function ExpensesChart({ data }: ExpensesChartProps) {
             </div>
             <div className="flex items-center gap-3 flex-shrink-0 ml-2">
               <span className="text-gray-200 font-medium">{formatEur(entry.amount)}</span>
-              <span className="text-gray-500 w-8 text-right">{((entry.amount / total) * 100).toFixed(0)}%</span>
+              <span className="text-gray-500 w-8 text-right">{total > 0 ? ((entry.amount / total) * 100).toFixed(0) : '0'}%</span>
             </div>
           </div>
         ))}
