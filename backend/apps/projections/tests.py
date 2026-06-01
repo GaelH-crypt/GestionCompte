@@ -1,6 +1,8 @@
 from decimal import Decimal
 from datetime import date, timedelta
+from dateutil.relativedelta import relativedelta
 from django.test import TestCase
+from django.contrib.auth.models import User
 
 
 class ProjectionEngineTest(TestCase):
@@ -157,3 +159,58 @@ class ProjectionEngineTest(TestCase):
         result = engine.project_daily(days=2)
         self.assertAlmostEqual(result[0]['balance'], 950.0, places=1)
         self.assertAlmostEqual(result[1]['balance'], 900.0, places=1)
+
+
+class BuildEngineFromUserTest(TestCase):
+    """Integration tests for build_engine_from_user using a real DB."""
+
+    def setUp(self):
+        from apps.accounts.models import Account
+        from apps.recurring.models import RecurringTransaction
+        from apps.transactions.models import Transaction
+
+        self.user = User.objects.create_user(username='testuser', password='pw')
+        self.account = Account.objects.create(
+            user=self.user, name='Compte courant', account_type='checking',
+            initial_balance=Decimal('5000'),
+        )
+        today = date.today()
+        # Stale next_occurrence: last month's 2nd → will advance to this month's 2nd.
+        last_month_2nd = (today.replace(day=1) - relativedelta(months=1)).replace(day=2)
+        self.loyer_recurring = RecurringTransaction.objects.create(
+            user=self.user,
+            account=self.account,
+            name='VIR SEPA LOYER',
+            amount=Decimal('915.00'),
+            transaction_type='expense',
+            frequency='monthly',
+            next_occurrence=last_month_2nd,
+        )
+        # Imported transaction for this month (day 1, before the stale occurrence).
+        Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            transaction_type='expense',
+            amount=Decimal('915.00'),
+            description='VIR SEPA LOYER 14 RUE HAUTE',
+            date=today.replace(day=1),
+        )
+
+    def test_stale_recurring_not_double_counted_in_daily_events(self):
+        """When an imported transaction covers the current month's recurring charge,
+        build_engine_from_user must not emit an occurrence within the same calendar
+        month — the payment was already captured in current_balance."""
+        from apps.projections.engine import build_engine_from_user
+        today = date.today()
+        engine = build_engine_from_user(self.user)
+
+        # The next loyer occurrence in daily_events must NOT be in the current month.
+        loyer_events = [
+            e for e in engine.daily_events
+            if e['amount'] == Decimal('915.00') and e['kind'] == 'expenses'
+        ]
+        for e in loyer_events:
+            self.assertFalse(
+                e['date'].year == today.year and e['date'].month == today.month,
+                f"Loyer occurrence {e['date']} is in the current month — double-counting detected",
+            )

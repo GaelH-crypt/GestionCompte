@@ -190,6 +190,17 @@ def build_engine_from_user(user, overrides: dict = None) -> ProjectionEngine:
     daily_end = today + timedelta(days=62)
     daily_events = []
 
+    # Pre-fetch transactions from the current month to detect recurring charges that
+    # were already paid via import. A stale next_occurrence can advance into the
+    # current calendar month even though the actual payment has already been imported,
+    # which would double-count the charge in the daily projection.
+    from apps.transactions.models import Transaction as _Tx
+    first_of_month = today.replace(day=1)
+    _paid_this_month = set(
+        _Tx.objects.filter(user=user, date__gte=first_of_month, date__lte=today)
+        .values_list('amount', 'transaction_type', 'account_id')
+    )
+
     _freq_step = {
         'weekly': relativedelta(weeks=1),
         'monthly': relativedelta(months=1),
@@ -203,6 +214,14 @@ def build_engine_from_user(user, overrides: dict = None) -> ProjectionEngine:
         occ = rt.next_occurrence
         # Catch up past occurrences to the projection window without emitting them.
         while occ <= today:
+            occ = occ + step
+        # If the next occurrence falls in the current calendar month but a matching
+        # transaction (same amount + type + account) was already imported this month,
+        # that occurrence has already been paid — advance to the following one.
+        if (
+            occ.year == today.year and occ.month == today.month
+            and (rt.amount, rt.transaction_type, rt.account_id) in _paid_this_month
+        ):
             occ = occ + step
         while occ <= daily_end:
             daily_events.append({'date': occ, 'amount': rt.amount, 'kind': kind, 'label': rt.name})
