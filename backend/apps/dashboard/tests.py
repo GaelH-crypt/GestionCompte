@@ -32,7 +32,6 @@ class DashboardSummaryTest(TestCase):
             monthly_payment=200, insurance_monthly=0, duration_months=24,
             start_date=datetime.date(2024, 1, 1),
         )
-        from apps.accounts.models import Account
         Account.objects.create(
             user=self.user, name='Compte Crédit', account_type='credit',
             initial_balance=0, linked_credit=credit,
