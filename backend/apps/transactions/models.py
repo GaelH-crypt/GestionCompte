@@ -25,6 +25,13 @@ class Transaction(models.Model):
         Account, on_delete=models.SET_NULL, null=True, blank=True, related_name='incoming_transfers'
     )
     external_id = models.CharField(max_length=100, null=True, blank=True, db_index=True)
+    recurring_transaction = models.ForeignKey(
+        'recurring.RecurringTransaction',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='linked_transactions',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
