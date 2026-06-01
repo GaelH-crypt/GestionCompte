@@ -2,7 +2,43 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 from rest_framework.test import APIClient
 from rest_framework import status
-from .models import Account
+from apps.accounts.models import Account
+
+
+class AccountCreditFieldsTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user('u', password='p')
+        self.client.force_authenticate(user=self.user)
+
+    def _make_account(self, **kwargs):
+        defaults = {'name': 'Test', 'account_type': 'checking', 'initial_balance': 0}
+        defaults.update(kwargs)
+        return Account.objects.create(user=self.user, **defaults)
+
+    def test_is_import_ignored_defaults_false(self):
+        acc = self._make_account()
+        self.assertFalse(acc.is_import_ignored)
+
+    def test_account_type_credit_valid(self):
+        acc = self._make_account(account_type='credit')
+        self.assertEqual(acc.account_type, 'credit')
+
+    def test_linked_credit_nullable(self):
+        acc = self._make_account()
+        self.assertIsNone(acc.linked_credit)
+
+    def test_patch_is_import_ignored(self):
+        acc = self._make_account()
+        resp = self.client.patch(f'/api/accounts/{acc.id}/', {'is_import_ignored': True}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(resp.data['is_import_ignored'])
+
+    def test_patch_account_type_credit(self):
+        acc = self._make_account()
+        resp = self.client.patch(f'/api/accounts/{acc.id}/', {'account_type': 'credit'}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['account_type'], 'credit')
 
 
 class AccountAPITest(TestCase):

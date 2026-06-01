@@ -8,8 +8,11 @@ class AccountSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Account
-        fields = ('id', 'name', 'account_type', 'initial_balance', 'current_balance',
-                  'color', 'icon', 'is_active', 'created_at')
+        fields = (
+            'id', 'name', 'account_type', 'initial_balance', 'current_balance',
+            'color', 'icon', 'is_active', 'is_import_ignored', 'linked_credit',
+            'created_at',
+        )
         read_only_fields = ('id', 'created_at', 'current_balance')
 
     def get_current_balance(self, obj):
