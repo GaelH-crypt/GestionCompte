@@ -190,6 +190,20 @@ def build_engine_from_user(user, overrides: dict = None) -> ProjectionEngine:
     daily_end = today + timedelta(days=62)
     daily_events = []
 
+    # Pre-fetch transactions from the current month to detect recurring charges that
+    # were already paid via import. Two detection layers:
+    # 1. Explicit link (recurring_transaction FK) — takes priority, works even when
+    #    amounts differ (e.g. variable childcare payments).
+    # 2. Heuristic (amount + type + account) — fallback for unlinked transactions.
+    from apps.transactions.models import Transaction as _Tx
+    first_of_month = today.replace(day=1)
+    _month_rows = list(
+        _Tx.objects.filter(user=user, date__gte=first_of_month, date__lte=today)
+        .values('amount', 'transaction_type', 'account_id', 'recurring_transaction_id')
+    )
+    _linked_this_month = {r['recurring_transaction_id'] for r in _month_rows if r['recurring_transaction_id']}
+    _paid_this_month = {(r['amount'], r['transaction_type'], r['account_id']) for r in _month_rows}
+
     _freq_step = {
         'weekly': relativedelta(weeks=1),
         'monthly': relativedelta(months=1),
@@ -204,6 +218,19 @@ def build_engine_from_user(user, overrides: dict = None) -> ProjectionEngine:
         # Catch up past occurrences to the projection window without emitting them.
         while occ <= today:
             occ = occ + step
+        # If the next occurrence falls in the current calendar month, check whether
+        # it has already been paid:
+        # 1. Explicit link (priority — handles variable amounts like childcare).
+        # 2. Heuristic amount+type+account fallback for unlinked transactions.
+        if occ.year == today.year and occ.month == today.month:
+            if rt.id in _linked_this_month or (
+                # Heuristic only applies to monthly/yearly: weekly charges can have
+                # multiple occurrences per month, so a past weekly payment would
+                # incorrectly suppress the next unpaid occurrence.
+                rt.frequency in ('monthly', 'yearly')
+                and (rt.amount, rt.transaction_type, rt.account_id) in _paid_this_month
+            ):
+                occ = occ + step
         while occ <= daily_end:
             daily_events.append({'date': occ, 'amount': rt.amount, 'kind': kind, 'label': rt.name})
             occ = occ + step

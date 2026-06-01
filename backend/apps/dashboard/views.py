@@ -51,7 +51,7 @@ def dashboard_summary(request):
         cat = cat_map.get(cat_id)
         while cat and cat.parent_id:
             if cat.parent_id in seen:
-                break
+                return None
             seen.add(cat.parent_id)
             cat = cat_map.get(cat.parent_id)
         return cat

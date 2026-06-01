@@ -170,3 +170,94 @@ class DetectRecurringEndpointTest(TestCase):
         resp = self.client.get('/api/transactions/detect-recurring/')
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(len(resp.data), 0)
+
+
+from decimal import Decimal
+from datetime import date
+
+
+class LinkRecurringViewTest(TestCase):
+    def setUp(self):
+        from apps.accounts.models import Account
+        from apps.recurring.models import RecurringTransaction
+        from apps.transactions.models import Transaction
+
+        self.client = APIClient()
+        self.user = User.objects.create_user(username='u', password='pw')
+        self.client.force_authenticate(self.user)
+
+        self.account = Account.objects.create(
+            user=self.user, name='CCP', account_type='checking', initial_balance=Decimal('0'),
+        )
+        self.rt = RecurringTransaction.objects.create(
+            user=self.user, account=self.account, name='Loyer',
+            amount=Decimal('915'), transaction_type='expense',
+            frequency='monthly', next_occurrence=date(2026, 5, 2),
+        )
+        self.tx = Transaction.objects.create(
+            user=self.user, account=self.account, transaction_type='expense',
+            amount=Decimal('915'), description='Loyer juin', date=date(2026, 6, 1),
+        )
+
+    def _url(self, tx_id):
+        return f'/api/transactions/{tx_id}/link-recurring/'
+
+    def test_link_sets_fk_and_advances_next_occurrence(self):
+        resp = self.client.post(self._url(self.tx.id), {'recurring_id': self.rt.id}, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.tx.refresh_from_db()
+        self.rt.refresh_from_db()
+        self.assertEqual(self.tx.recurring_transaction_id, self.rt.id)
+        # tx.date (2026-06-01) + 1 month = 2026-07-01
+        self.assertEqual(self.rt.next_occurrence, date(2026, 7, 1))
+
+    def test_link_null_removes_fk(self):
+        self.tx.recurring_transaction = self.rt
+        self.tx.save()
+        resp = self.client.post(self._url(self.tx.id), {'recurring_id': None}, format='json')
+        self.assertEqual(resp.status_code, 200)
+        self.tx.refresh_from_db()
+        self.assertIsNone(self.tx.recurring_transaction_id)
+
+    def test_type_mismatch_returns_400(self):
+        from apps.recurring.models import RecurringTransaction
+        rt_income = RecurringTransaction.objects.create(
+            user=self.user, account=self.account, name='Salaire',
+            amount=Decimal('2000'), transaction_type='income',
+            frequency='monthly', next_occurrence=date(2026, 6, 27),
+        )
+        resp = self.client.post(self._url(self.tx.id), {'recurring_id': rt_income.id}, format='json')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_link_other_user_recurring_returns_404(self):
+        other = User.objects.create_user(username='other', password='pw')
+        from apps.accounts.models import Account
+        from apps.recurring.models import RecurringTransaction
+        other_account = Account.objects.create(
+            user=other, name='Autre', account_type='checking', initial_balance=Decimal('0'),
+        )
+        other_rt = RecurringTransaction.objects.create(
+            user=other, account=other_account, name='Loyer autre',
+            amount=Decimal('500'), transaction_type='expense',
+            frequency='monthly', next_occurrence=date(2026, 6, 1),
+        )
+        resp = self.client.post(self._url(self.tx.id), {'recurring_id': other_rt.id}, format='json')
+        self.assertEqual(resp.status_code, 404)
+
+    def test_next_occurrence_not_advanced_when_tx_before_next_occ(self):
+        from apps.recurring.models import RecurringTransaction
+        rt = RecurringTransaction.objects.create(
+            user=self.user, account=self.account, name='Futur',
+            amount=Decimal('200'), transaction_type='expense',
+            frequency='monthly', next_occurrence=date(2026, 7, 1),
+        )
+        from apps.transactions.models import Transaction
+        tx_early = Transaction.objects.create(
+            user=self.user, account=self.account, transaction_type='expense',
+            amount=Decimal('200'), description='Paiement anticipé', date=date(2026, 6, 15),
+        )
+        resp = self.client.post(self._url(tx_early.id), {'recurring_id': rt.id}, format='json')
+        self.assertEqual(resp.status_code, 200)
+        rt.refresh_from_db()
+        # tx.date (2026-06-15) < rt.next_occurrence (2026-07-01) → no advance
+        self.assertEqual(rt.next_occurrence, date(2026, 7, 1))
