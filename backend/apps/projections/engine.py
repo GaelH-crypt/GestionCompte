@@ -225,9 +225,12 @@ def build_engine_from_user(user, overrides: dict = None) -> ProjectionEngine:
         # 1. Explicit link (priority — handles variable amounts like childcare).
         # 2. Heuristic amount+type+account fallback for unlinked transactions.
         if occ.year == today.year and occ.month == today.month:
-            if (
-                rt.id in _linked_this_month
-                or (rt.amount, rt.transaction_type, rt.account_id) in _paid_this_month
+            if rt.id in _linked_this_month or (
+                # Heuristic only applies to monthly/yearly: weekly charges can have
+                # multiple occurrences per month, so a past weekly payment would
+                # incorrectly suppress the next unpaid occurrence.
+                rt.frequency in ('monthly', 'yearly')
+                and (rt.amount, rt.transaction_type, rt.account_id) in _paid_this_month
             ):
                 occ = occ + step
         while occ <= daily_end:
