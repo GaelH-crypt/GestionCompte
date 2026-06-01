@@ -191,14 +191,19 @@ def build_engine_from_user(user, overrides: dict = None) -> ProjectionEngine:
     daily_events = []
 
     # Pre-fetch transactions from the current month to detect recurring charges that
-    # were already paid via import. A stale next_occurrence can advance into the
-    # current calendar month even though the actual payment has already been imported,
-    # which would double-count the charge in the daily projection.
+    # were already paid via import. Two detection layers:
+    # 1. Explicit link (recurring_transaction FK) — takes priority, works even when
+    #    amounts differ (e.g. variable childcare payments).
+    # 2. Heuristic (amount + type + account) — fallback for unlinked transactions.
     from apps.transactions.models import Transaction as _Tx
     first_of_month = today.replace(day=1)
+    _qs = _Tx.objects.filter(user=user, date__gte=first_of_month, date__lte=today)
+    _linked_this_month = set(
+        _qs.filter(recurring_transaction__isnull=False)
+        .values_list('recurring_transaction_id', flat=True)
+    )
     _paid_this_month = set(
-        _Tx.objects.filter(user=user, date__gte=first_of_month, date__lte=today)
-        .values_list('amount', 'transaction_type', 'account_id')
+        _qs.values_list('amount', 'transaction_type', 'account_id')
     )
 
     _freq_step = {
@@ -215,14 +220,16 @@ def build_engine_from_user(user, overrides: dict = None) -> ProjectionEngine:
         # Catch up past occurrences to the projection window without emitting them.
         while occ <= today:
             occ = occ + step
-        # If the next occurrence falls in the current calendar month but a matching
-        # transaction (same amount + type + account) was already imported this month,
-        # that occurrence has already been paid — advance to the following one.
-        if (
-            occ.year == today.year and occ.month == today.month
-            and (rt.amount, rt.transaction_type, rt.account_id) in _paid_this_month
-        ):
-            occ = occ + step
+        # If the next occurrence falls in the current calendar month, check whether
+        # it has already been paid:
+        # 1. Explicit link (priority — handles variable amounts like childcare).
+        # 2. Heuristic amount+type+account fallback for unlinked transactions.
+        if occ.year == today.year and occ.month == today.month:
+            if (
+                rt.id in _linked_this_month
+                or (rt.amount, rt.transaction_type, rt.account_id) in _paid_this_month
+            ):
+                occ = occ + step
         while occ <= daily_end:
             daily_events.append({'date': occ, 'amount': rt.amount, 'kind': kind, 'label': rt.name})
             occ = occ + step

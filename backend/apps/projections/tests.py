@@ -214,3 +214,43 @@ class BuildEngineFromUserTest(TestCase):
                 e['date'].year == today.year and e['date'].month == today.month,
                 f"Loyer occurrence {e['date']} is in the current month — double-counting detected",
             )
+
+    def test_explicit_link_takes_priority_over_heuristic(self):
+        """An explicitly linked transaction must prevent double-counting
+        even when amounts differ (variable childcare payments)."""
+        from apps.transactions.models import Transaction
+        today = date.today()
+        from apps.recurring.models import RecurringTransaction
+        rt_nounou = RecurringTransaction.objects.create(
+            user=self.user,
+            account=self.account,
+            name='Nounou',
+            amount=Decimal('300.00'),
+            transaction_type='expense',
+            frequency='monthly',
+            next_occurrence=(today.replace(day=1) - relativedelta(months=1)).replace(day=5),
+        )
+        tx_nounou = Transaction.objects.create(
+            user=self.user,
+            account=self.account,
+            transaction_type='expense',
+            amount=Decimal('285.00'),  # different amount — heuristic would miss this
+            description='Paiement nounou juin',
+            date=today.replace(day=1),
+        )
+        tx_nounou.recurring_transaction = rt_nounou
+        tx_nounou.save()
+
+        from apps.projections.engine import build_engine_from_user
+        engine = build_engine_from_user(self.user)
+
+        nounou_events_this_month = [
+            e for e in engine.daily_events
+            if e['amount'] == Decimal('300.00')
+            and e['date'].year == today.year
+            and e['date'].month == today.month
+        ]
+        self.assertEqual(
+            len(nounou_events_this_month), 0,
+            "Nounou must not appear in current month via explicit link",
+        )
