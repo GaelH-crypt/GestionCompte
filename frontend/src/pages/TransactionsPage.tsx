@@ -2,8 +2,9 @@ import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Plus, Trash2, Pencil, Search, Upload,
-  ArrowUpCircle, ArrowDownCircle, ArrowLeftRight, RefreshCw,
+  ArrowUpCircle, ArrowDownCircle, ArrowLeftRight, RefreshCw, Link2,
 } from 'lucide-react'
+import { LinkRecurringModal } from '@/components/transactions/LinkRecurringModal'
 import { transactionsApi } from '@/api/transactions'
 import { recurringApi } from '@/api/recurring'
 import { accountsApi } from '@/api/accounts'
@@ -33,13 +34,14 @@ const TYPE_COLOR: Record<TransactionType, string> = {
   transfer: 'text-blue-400',
 }
 
-type ColKey = 'icon' | 'description' | 'account' | 'category' | 'date' | 'amount' | 'actions'
+type ColKey = 'icon' | 'description' | 'account' | 'category' | 'recurring' | 'date' | 'amount' | 'actions'
 
 const COLUMNS: { key: ColKey; label: string; width: number; resizable: boolean }[] = [
   { key: 'icon', label: '', width: 48, resizable: false },
   { key: 'description', label: 'Description', width: 260, resizable: true },
   { key: 'account', label: 'Compte', width: 150, resizable: true },
   { key: 'category', label: 'Catégorie', width: 150, resizable: true },
+  { key: 'recurring', label: '', width: 36, resizable: false },
   { key: 'date', label: 'Date', width: 120, resizable: true },
   { key: 'amount', label: 'Montant', width: 130, resizable: true },
   { key: 'actions', label: '', width: 90, resizable: false },
@@ -107,6 +109,7 @@ export default function TransactionsPage() {
   const [typeFilter, setTypeFilter] = useState('')
   const [showDetect, setShowDetect] = useState(false)
   const [page, setPage] = useState(1)
+  const [linkingTx, setLinkingTx] = useState<Transaction | null>(null)
   const { widths, startResize, total } = useColumnWidths()
 
   const params: Record<string, string | number> = { page }
@@ -217,6 +220,14 @@ export default function TransactionsPage() {
                   <td className="px-4 py-3 text-sm text-gray-400 truncate" title={tx.category_name ?? '—'}>
                     {tx.category_name ?? '—'}
                   </td>
+                  <td className="px-2 py-3 text-center">
+                    {tx.recurring_transaction_name && (
+                      <Link2
+                        className="h-3.5 w-3.5 text-brand-500 mx-auto"
+                        title={tx.recurring_transaction_name}
+                      />
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-sm text-gray-400 whitespace-nowrap truncate">
                     {format(new Date(tx.date), 'd MMM yyyy', { locale: fr })}
                   </td>
@@ -228,6 +239,17 @@ export default function TransactionsPage() {
                   </td>
                   <td className="pr-4 py-3">
                     <div className="flex gap-1 justify-end">
+                      <button
+                        onClick={() => setLinkingTx(tx)}
+                        className={`p-1.5 rounded-lg ${
+                          tx.recurring_transaction
+                            ? 'text-brand-500 hover:bg-brand-500/10'
+                            : 'text-gray-500 hover:text-white hover:bg-gray-800'
+                        }`}
+                        title={tx.recurring_transaction_name ?? 'Lier à une charge fixe'}
+                      >
+                        <Link2 className="h-3.5 w-3.5" />
+                      </button>
                       <button
                         onClick={() => { setEditing(tx); setShowForm(true) }}
                         className="p-1.5 text-gray-500 hover:text-white hover:bg-gray-800 rounded-lg"
@@ -246,7 +268,7 @@ export default function TransactionsPage() {
               ))}
               {(data?.results ?? []).length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-sm text-gray-500">
+                  <td colSpan={8} className="px-6 py-12 text-center text-sm text-gray-500">
                     Aucune transaction trouvée.
                   </td>
                 </tr>
@@ -291,6 +313,11 @@ export default function TransactionsPage() {
                 {format(new Date(tx.date), 'd MMM yyyy', { locale: fr })}
               </span>
             </div>
+            {tx.recurring_transaction_name && (
+              <span className="text-xs text-brand-400 pl-6">
+                🔗 {tx.recurring_transaction_name}
+              </span>
+            )}
             <div className="flex gap-1 justify-end">
               <button
                 onClick={() => { setEditing(tx); setShowForm(true) }}
@@ -350,6 +377,13 @@ export default function TransactionsPage() {
         onOpenChange={setShowImport}
         categories={categoriesData ?? []}
       />
+
+      {linkingTx && (
+        <LinkRecurringModal
+          transaction={linkingTx}
+          onClose={() => setLinkingTx(null)}
+        />
+      )}
     </div>
   )
 }
