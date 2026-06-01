@@ -6,13 +6,22 @@ from apps.accounts.models import Account
 class TransactionSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source='category.name', read_only=True)
     account_name = serializers.CharField(source='account.name', read_only=True)
+    recurring_transaction_name = serializers.CharField(
+        source='recurring_transaction.name', read_only=True, allow_null=True, default=None
+    )
 
     class Meta:
         model = Transaction
-        fields = ('id', 'account', 'account_name', 'transaction_type', 'amount',
-                  'category', 'category_name', 'description', 'date', 'is_recurring',
-                  'note', 'tags', 'transfer_to_account', 'created_at', 'updated_at')
-        read_only_fields = ('id', 'created_at', 'updated_at', 'category_name', 'account_name')
+        fields = (
+            'id', 'account', 'account_name', 'transaction_type', 'amount',
+            'category', 'category_name', 'description', 'date', 'is_recurring',
+            'note', 'tags', 'transfer_to_account', 'created_at', 'updated_at',
+            'recurring_transaction', 'recurring_transaction_name',
+        )
+        read_only_fields = (
+            'id', 'created_at', 'updated_at', 'category_name', 'account_name',
+            'recurring_transaction_name',
+        )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
