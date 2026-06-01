@@ -222,10 +222,9 @@ export default function TransactionsPage() {
                   </td>
                   <td className="px-2 py-3 text-center">
                     {tx.recurring_transaction_name && (
-                      <Link2
-                        className="h-3.5 w-3.5 text-brand-500 mx-auto"
-                        title={tx.recurring_transaction_name}
-                      />
+                      <span title={tx.recurring_transaction_name} className="flex justify-center">
+                        <Link2 className="h-3.5 w-3.5 text-brand-500" />
+                      </span>
                     )}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-400 whitespace-nowrap truncate">
