@@ -66,6 +66,8 @@ export interface Transaction {
   transfer_to_account: number | null
   created_at: string
   updated_at: string
+  recurring_transaction: number | null
+  recurring_transaction_name: string | null
 }
 
 // ─── Recurring ─────────────────────────────────────────────────────────────

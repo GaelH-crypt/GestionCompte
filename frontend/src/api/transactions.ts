@@ -14,4 +14,6 @@ export const transactionsApi = {
     client.delete(`/transactions/${id}/`),
   detectRecurring: () =>
     client.get<RecurringSuggestion[]>('/transactions/detect-recurring/'),
+  linkRecurring: (txId: number, recurringId: number | null) =>
+    client.post<Transaction>(`/transactions/${txId}/link-recurring/`, { recurring_id: recurringId }),
 }
