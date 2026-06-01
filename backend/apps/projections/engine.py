@@ -128,7 +128,7 @@ def build_engine_from_user(user, overrides: dict = None) -> ProjectionEngine:
     from apps.credits.models import Credit
     from apps.recurring.models import RecurringTransaction
 
-    accounts = Account.objects.filter(user=user, is_active=True)
+    accounts = Account.objects.filter(user=user, is_active=True).exclude(account_type='credit')
     total_balance = sum(get_account_balance(a) for a in accounts) or Decimal('0')
 
     # Monthly and weekly recurring: convert to per-month average.

@@ -20,7 +20,7 @@ def dashboard_summary(request):
     today = date.today()
     first_of_month = today.replace(day=1)
 
-    accounts = Account.objects.filter(user=user, is_active=True)
+    accounts = Account.objects.filter(user=user, is_active=True).exclude(account_type='credit')
     total_balance = sum(get_account_balance(a) for a in accounts)
     accounts_data = [
         {'id': a.id, 'name': a.name, 'type': a.account_type,
