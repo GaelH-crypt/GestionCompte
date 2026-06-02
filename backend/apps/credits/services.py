@@ -4,7 +4,15 @@ from dateutil.relativedelta import relativedelta
 
 
 def calculate_credit_details(credit) -> dict:
-    """Compute remaining months, total cost, monthly rate, schedule."""
+    if credit.credit_type == 'revolving' or credit.remaining_capital is None:
+        return {
+            'remaining_months': None,
+            'total_interest': None,
+            'total_cost': None,
+            'total_monthly_charge': 0,
+            'estimated_end_date': None,
+        }
+
     today = date.today()
     monthly_rate = Decimal(str(credit.interest_rate)) / Decimal('1200')
     total_monthly = credit.monthly_payment + credit.insurance_monthly
@@ -34,7 +42,8 @@ def calculate_credit_details(credit) -> dict:
 
 
 def generate_schedule(credit, max_months: int = 12) -> list:
-    """Return first max_months payment schedule rows."""
+    if credit.credit_type == 'revolving' or credit.remaining_capital is None:
+        return []
     monthly_rate = Decimal(str(credit.interest_rate)) / Decimal('1200')
     capital = Decimal(str(credit.remaining_capital))
     schedule = []
