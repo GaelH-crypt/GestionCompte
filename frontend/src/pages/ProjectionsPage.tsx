@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react'
 import { projectionsApi } from '@/api/projections'
@@ -34,6 +35,12 @@ export default function ProjectionsPage() {
   const negativeCount = data.filter((d) => d.balance < 0).length
   const minBalance = Math.min(...data.map((d) => d.balance))
 
+  const hasChecking = data.some((d) => d.checking_balance != null)
+  const checkingStart = hasChecking ? (first.checking_balance ?? 0) : null
+  const checkingEnd = hasChecking ? (last.checking_balance ?? 0) : null
+
+  const horizonLabel = months === 1 ? '1 mois' : months < 12 ? `${months} mois` : months === 12 ? '1 an' : '5 ans'
+
   return (
     <div className="space-y-6">
       {/* Horizon selector */}
@@ -53,7 +60,20 @@ export default function ProjectionsPage() {
         ))}
       </div>
 
-      {/* Alert */}
+      {/* Invite si pas de compte courant configuré */}
+      {!hasChecking && (
+        <div className="flex items-center gap-3 bg-gray-800/60 border border-gray-700 rounded-xl px-4 py-3">
+          <p className="text-sm text-gray-400">
+            Configurez un{' '}
+            <Link to="/settings" className="text-brand-400 underline hover:text-brand-300">
+              compte courant principal
+            </Link>{' '}
+            pour afficher sa projection séparément.
+          </p>
+        </div>
+      )}
+
+      {/* Alert solde négatif */}
       {negativeCount > 0 && (
         <div className="flex items-start gap-3 bg-red-900/20 border border-red-800 rounded-xl p-4">
           <AlertTriangle className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
@@ -66,44 +86,78 @@ export default function ProjectionsPage() {
         </div>
       )}
 
-      {/* KPI cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <p className="text-sm text-gray-400">Solde de départ</p>
-          <p className="text-2xl font-bold text-white mt-1">{formatEur(startBalance)}</p>
-        </Card>
-        <Card>
-          <p className="text-sm text-gray-400">
-            Solde prévu dans {months === 1 ? '1 mois' : months < 12 ? `${months} mois` : months === 12 ? '1 an' : '5 ans'}
-          </p>
-          <p className={`text-2xl font-bold mt-1 ${last.balance >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-            {formatEur(last.balance)}
-          </p>
-        </Card>
-        <Card>
-          <div className="flex items-center gap-2 mb-1">
-            {last.balance > startBalance ? (
-              <TrendingUp className="h-4 w-4 text-green-400" />
-            ) : (
-              <TrendingDown className="h-4 w-4 text-red-400" />
-            )}
-            <p className="text-sm text-gray-400">Évolution</p>
-          </div>
-          <p
-            className={`text-2xl font-bold ${
-              last.balance >= startBalance ? 'text-green-400' : 'text-red-400'
-            }`}
-          >
-            {last.balance >= startBalance ? '+' : ''}
-            {formatEur(last.balance - startBalance)}
-          </p>
-        </Card>
+      {/* KPI cards — Solde global */}
+      <div>
+        <p className="text-xs text-gray-500 uppercase tracking-wider mb-2 px-1">Solde global</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card>
+            <p className="text-sm text-gray-400">Solde de départ</p>
+            <p className="text-2xl font-bold text-white mt-1">{formatEur(startBalance)}</p>
+          </Card>
+          <Card>
+            <p className="text-sm text-gray-400">Solde prévu dans {horizonLabel}</p>
+            <p className={`text-2xl font-bold mt-1 ${last.balance >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {formatEur(last.balance)}
+            </p>
+          </Card>
+          <Card>
+            <div className="flex items-center gap-2 mb-1">
+              {last.balance > startBalance ? (
+                <TrendingUp className="h-4 w-4 text-green-400" />
+              ) : (
+                <TrendingDown className="h-4 w-4 text-red-400" />
+              )}
+              <p className="text-sm text-gray-400">Évolution</p>
+            </div>
+            <p
+              className={`text-2xl font-bold ${
+                last.balance >= startBalance ? 'text-green-400' : 'text-red-400'
+              }`}
+            >
+              {last.balance >= startBalance ? '+' : ''}
+              {formatEur(last.balance - startBalance)}
+            </p>
+          </Card>
+        </div>
       </div>
+
+      {/* KPI cards — Compte courant */}
+      {hasChecking && checkingStart !== null && checkingEnd !== null && (
+        <div>
+          <p className="text-xs text-gray-500 uppercase tracking-wider mb-2 px-1">Compte courant</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Card>
+              <p className="text-sm text-gray-400">Solde de départ CC</p>
+              <p className="text-2xl font-bold text-white mt-1">{formatEur(checkingStart)}</p>
+            </Card>
+            <Card>
+              <p className="text-sm text-gray-400">Solde prévu CC dans {horizonLabel}</p>
+              <p className={`text-2xl font-bold mt-1 ${checkingEnd >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {formatEur(checkingEnd)}
+              </p>
+            </Card>
+            <Card>
+              <div className="flex items-center gap-2 mb-1">
+                {checkingEnd > checkingStart ? (
+                  <TrendingUp className="h-4 w-4 text-green-400" />
+                ) : (
+                  <TrendingDown className="h-4 w-4 text-red-400" />
+                )}
+                <p className="text-sm text-gray-400">Évolution CC</p>
+              </div>
+              <p className={`text-2xl font-bold ${checkingEnd >= checkingStart ? 'text-green-400' : 'text-red-400'}`}>
+                {checkingEnd >= checkingStart ? '+' : ''}
+                {formatEur(checkingEnd - checkingStart)}
+              </p>
+            </Card>
+          </div>
+        </div>
+      )}
 
       {/* Chart */}
       <Card>
         <CardTitle>Projection du solde</CardTitle>
-        <ProjectionChart data={data} />
+        <ProjectionChart data={data} showChecking={hasChecking} />
       </Card>
 
       {/* Monthly table */}
