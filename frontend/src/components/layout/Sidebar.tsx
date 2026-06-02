@@ -13,6 +13,7 @@ import {
   PiggyBank,
   CalendarDays,
   Building2,
+  Settings,
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
@@ -29,6 +30,7 @@ const NAV_ITEMS = [
   { to: '/projections', icon: TrendingUp, label: 'Projections' },
   { to: '/simulations', icon: Beaker, label: 'Simulations' },
   { to: '/bank-sync', icon: Building2, label: 'Sync bancaire' },
+  { to: '/settings', icon: Settings, label: 'Paramètres' },
 ]
 
 export default function Sidebar() {
