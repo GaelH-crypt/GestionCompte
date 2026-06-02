@@ -213,6 +213,7 @@ export interface ProjectionPoint {
   delta?: number
   events?: { label: string; amount: number; kind: string }[]
   checking_balance?: number | null
+  checking_start_balance?: number
 }
 
 export interface SimulationExpenseItem {

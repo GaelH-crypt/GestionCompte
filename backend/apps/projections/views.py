@@ -35,6 +35,7 @@ def projection_view(request):
         result = engine.project_daily(days)
         if checking_engine:
             checking_result = checking_engine.project_daily(days)
+            result[0]['checking_start_balance'] = float(checking_engine.current_balance)
             for row, crow in zip(result, checking_result):
                 row['checking_balance'] = crow['balance']
         else:
@@ -45,6 +46,7 @@ def projection_view(request):
     result = engine.project(months)
     if checking_engine:
         checking_result = checking_engine.project(months)
+        result[0]['checking_start_balance'] = float(checking_engine.current_balance)
         for row, crow in zip(result, checking_result):
             row['checking_balance'] = crow['balance']
     else:

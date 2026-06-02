@@ -36,7 +36,7 @@ export default function SettingsPage() {
   if (loadingPrefs || loadingAccounts) return <PageSpinner />
 
   const activeAccounts = (accounts?.results ?? []).filter(
-    (a) => a.is_active && a.account_type !== 'credit'
+    (a) => a.is_active && a.account_type === 'checking'
   )
 
   function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {

@@ -29,9 +29,9 @@ def preferences_view(request):
         return Response({'primary_account': None, 'primary_account_name': None})
 
     try:
-        account = Account.objects.get(pk=account_id, user=request.user, is_active=True)
+        account = Account.objects.get(pk=account_id, user=request.user, is_active=True, account_type='checking')
     except Account.DoesNotExist:
-        return Response({'error': 'Compte introuvable ou accès refusé.'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'error': 'Compte introuvable, inactif ou non courant.'}, status=status.HTTP_400_BAD_REQUEST)
 
     pref.primary_account = account
     pref.save()

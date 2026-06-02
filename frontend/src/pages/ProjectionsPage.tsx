@@ -36,7 +36,7 @@ export default function ProjectionsPage() {
   const minBalance = Math.min(...data.map((d) => d.balance))
 
   const hasChecking = data.some((d) => d.checking_balance != null)
-  const checkingStart = hasChecking ? (first.checking_balance ?? 0) : null
+  const checkingStart = hasChecking ? (first.checking_start_balance ?? first.checking_balance ?? 0) : null
   const checkingEnd = hasChecking ? (last.checking_balance ?? 0) : null
 
   const horizonLabel = months === 1 ? '1 mois' : months < 12 ? `${months} mois` : months === 12 ? '1 an' : '5 ans'
