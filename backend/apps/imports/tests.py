@@ -410,3 +410,40 @@ class PreviewColumnMappingAPITest(TestCase):
         data = resp.json()
         self.assertEqual(len(data['accounts']), 1)
         self.assertEqual(len(data['transactions']['Data']), 2)
+
+
+class ImportIgnoredAccountTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user('imp_ign_user', password='p')
+        self.client.force_authenticate(user=self.user)
+        self.ignored_account = Account.objects.create(
+            user=self.user, name='ETALIS', account_type='other',
+            initial_balance=0, is_import_ignored=True,
+        )
+        self.normal_account = Account.objects.create(
+            user=self.user, name='Courant Principal', account_type='checking',
+            initial_balance=100,
+        )
+
+    def test_confirm_skips_ignored_account_transactions(self):
+        """Confirm: transactions for an ignored account are silently skipped."""
+        from apps.transactions.models import Transaction
+        count_before = Transaction.objects.filter(user=self.user).count()
+
+        resp = self.client.post('/api/import/confirm/', {
+            'mapping': {
+                'ETALIS': {'create': False, 'id': self.ignored_account.id, 'name': 'ETALIS', 'account_type': 'other'},
+            },
+            'transactions': {
+                'ETALIS': [
+                    {'date': '2024-01-15', 'description': 'Tirage crédit', 'amount': '-300.00',
+                     'transaction_type': 'expense', 'category_id': None},
+                ],
+            },
+        }, format='json')
+
+        self.assertEqual(resp.status_code, 200)
+        count_after = Transaction.objects.filter(user=self.user).count()
+        self.assertEqual(count_before, count_after)
+        self.assertIn('ETALIS', resp.data.get('skipped_ribs', []))

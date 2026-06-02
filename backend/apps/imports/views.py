@@ -45,9 +45,11 @@ class PreviewView(APIView):
             return Response({'error': 'Format de fichier non reconnu.'}, status=status.HTTP_400_BAD_REQUEST)
 
         user_accounts = list(Account.objects.filter(user=request.user))
+        ignored_names = {a.name.lower() for a in user_accounts if a.is_import_ignored}
         existing_accounts = [
             {'id': a.id, 'name': a.name, 'account_type': a.account_type}
             for a in user_accounts
+            if not a.is_import_ignored
         ]
 
         transactions_out = {}
@@ -57,11 +59,15 @@ class PreviewView(APIView):
 
         for rib, txs in parsed['transactions'].items():
             imported_name = rib_to_imported_name.get(rib, '')
+            # Skip if this RIB/name matches an ignored account
+            if imported_name.lower() in ignored_names or rib.lower() in ignored_names:
+                continue
             matching_account = next(
                 (
                     a for a in user_accounts
-                    if rib in a.name or a.name in rib
-                    or (imported_name and a.name.lower() == imported_name.lower())
+                    if not a.is_import_ignored
+                    and (rib in a.name or a.name in rib
+                         or (imported_name and a.name.lower() == imported_name.lower()))
                 ),
                 None,
             )
@@ -79,8 +85,12 @@ class PreviewView(APIView):
             transactions_out[rib] = enriched
             duplicate_counts[rib] = dup_count
 
+        visible_parsed_accounts = [
+            a for a in parsed['accounts']
+            if a['name'].lower() not in ignored_names and a['rib'].lower() not in ignored_names
+        ]
         return Response({
-            'accounts': parsed['accounts'],
+            'accounts': visible_parsed_accounts,
             'existing_accounts': existing_accounts,
             'transactions': transactions_out,
             'duplicate_counts': duplicate_counts,
@@ -144,6 +154,10 @@ class ConfirmView(APIView):
                     {'error': f'Compte {account_id} introuvable ou inaccessible.'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
+
+            if account.is_import_ignored:
+                skipped_ribs.append(rib)
+                continue
 
             # Normalize existing transactions to (date_string, Decimal, str) for comparison
             existing_txs = set()
