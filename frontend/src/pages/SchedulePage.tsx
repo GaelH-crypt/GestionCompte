@@ -19,6 +19,7 @@ const CREDIT_TYPE_LABELS: Record<CreditType, string> = {
   mortgage: 'Immobilier',
   auto: 'Auto',
   consumer: 'Consommation',
+  revolving: 'Revolving',
   other: 'Autre',
 }
 
