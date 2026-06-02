@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import {
   Wallet, TrendingUp, TrendingDown, Heart,
-  CreditCard, RefreshCw, AlertTriangle, ArrowUpCircle,
+  CreditCard, RefreshCw, AlertTriangle, ArrowUpCircle, Building2,
 } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { dashboardApi } from '@/api/dashboard'
 import { projectionsApi } from '@/api/projections'
 import { StatCard } from '@/components/dashboard/StatCard'
@@ -32,14 +33,13 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       {/* KPI row */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
         <StatCard
           title="Solde global"
           value={formatEur(summary.total_balance)}
           icon={Wallet}
           iconBg="bg-brand-500/20"
           iconColor="text-brand-400"
-          className="col-span-2 md:col-span-1"
         />
         <StatCard
           title="Revenus du mois"
@@ -76,6 +76,31 @@ export default function DashboardPage() {
           iconBg="bg-purple-500/20"
           iconColor="text-purple-400"
         />
+        {/* Tuile compte courant */}
+        {summary.checking_account_balance !== null ? (
+          <StatCard
+            title="Solde compte courant"
+            value={formatEur(summary.checking_account_balance)}
+            icon={Building2}
+            iconBg="bg-emerald-500/20"
+            iconColor="text-emerald-400"
+          />
+        ) : (
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-400">Solde compte courant</span>
+              <div className="p-2 rounded-lg bg-emerald-500/20">
+                <Building2 className="h-5 w-5 text-emerald-400" />
+              </div>
+            </div>
+            <p className="text-sm text-gray-500">
+              Non configuré —{' '}
+              <Link to="/settings" className="text-brand-400 underline hover:text-brand-300">
+                Configurer
+              </Link>
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Charts */}

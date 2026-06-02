@@ -18,13 +18,21 @@ const tooltipStyle = {
   fontSize: '12px',
 }
 
+const formatEur = (n: number) =>
+  new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(n)
+
 function ChartTooltip({ active, payload, label }: TooltipProps<number, string>) {
   if (!active || !payload?.[0]) return null
   const point = payload[0].payload as ProjectionPoint
   return (
     <div style={tooltipStyle}>
       <p style={{ color: '#9ca3af', marginBottom: '4px' }}>Jour : {label}</p>
-      <p style={{ color: '#fff', fontWeight: 600 }}>{formatEur(point.balance)}</p>
+      <p style={{ color: '#fff', fontWeight: 600 }}>Global : {formatEur(point.balance)}</p>
+      {point.checking_balance != null && (
+        <p style={{ color: '#10b981', fontWeight: 500 }}>
+          CC : {formatEur(point.checking_balance)}
+        </p>
+      )}
       {point.events && point.events.length > 0 && (
         <>
           <hr style={{ borderColor: '#374151', margin: '6px 0' }} />
@@ -39,12 +47,10 @@ function ChartTooltip({ active, payload, label }: TooltipProps<number, string>) 
   )
 }
 
-const formatEur = (n: number) =>
-  new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(n)
-
 export function EvolutionChart({ data }: EvolutionChartProps) {
   const minBalance = Math.min(...data.map((d) => d.balance))
   const isNegative = minBalance < 0
+  const hasChecking = data.some((d) => d.checking_balance != null)
 
   return (
     <Card>
@@ -56,22 +62,33 @@ export function EvolutionChart({ data }: EvolutionChartProps) {
               <stop offset="5%" stopColor={isNegative ? '#ef4444' : '#6366f1'} stopOpacity={0.3} />
               <stop offset="95%" stopColor={isNegative ? '#ef4444' : '#6366f1'} stopOpacity={0} />
             </linearGradient>
+            <linearGradient id="checkingGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#10b981" stopOpacity={0.25} />
+              <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+            </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-          <XAxis
-            dataKey="month"
-            tick={{ fill: '#6b7280', fontSize: 11 }}
-            interval={4}
-          />
+          <XAxis dataKey="month" tick={{ fill: '#6b7280', fontSize: 11 }} interval={4} />
           <YAxis
             tick={{ fill: '#6b7280', fontSize: 11 }}
             tickFormatter={(v) => `${(v / 1000).toFixed(0)}k€`}
           />
           <Tooltip content={<ChartTooltip />} />
+          {hasChecking && (
+            <Area
+              type="monotone"
+              dataKey="checking_balance"
+              name="Compte courant"
+              stroke="#10b981"
+              fill="url(#checkingGrad)"
+              strokeWidth={1.5}
+              dot={false}
+            />
+          )}
           <Area
             type="monotone"
             dataKey="balance"
-            name="Solde"
+            name="Solde global"
             stroke={isNegative ? '#ef4444' : '#6366f1'}
             fill="url(#balanceGrad)"
             strokeWidth={2}
