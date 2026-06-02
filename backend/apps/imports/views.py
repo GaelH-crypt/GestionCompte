@@ -60,7 +60,7 @@ class PreviewView(APIView):
         for rib, txs in parsed['transactions'].items():
             imported_name = rib_to_imported_name.get(rib, '')
             # Skip if this RIB/name matches an ignored account
-            if imported_name.lower() in ignored_names or rib.lower() in ignored_names:
+            if imported_name.lower() in ignored_names:
                 continue
             matching_account = next(
                 (
@@ -87,7 +87,7 @@ class PreviewView(APIView):
 
         visible_parsed_accounts = [
             a for a in parsed['accounts']
-            if a['name'].lower() not in ignored_names and a['rib'].lower() not in ignored_names
+            if a['name'].lower() not in ignored_names
         ]
         return Response({
             'accounts': visible_parsed_accounts,
