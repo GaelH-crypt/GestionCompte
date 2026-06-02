@@ -19,7 +19,10 @@ def preferences_view(request):
         })
 
     # PATCH
-    account_id = request.data.get('primary_account')
+    if 'primary_account' not in request.data:
+        return Response({'error': 'primary_account is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    account_id = request.data['primary_account']
     if account_id is None:
         pref.primary_account = None
         pref.save()
