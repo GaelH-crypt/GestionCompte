@@ -40,3 +40,27 @@ class DashboardSummaryTest(TestCase):
         self.assertEqual(resp.status_code, 200)
         account_names = [a['name'] for a in resp.data['accounts']]
         self.assertNotIn('Compte Crédit', account_names)
+
+
+class DashboardCheckingAccountTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user('checkinguser', password='p')
+        self.client.force_authenticate(user=self.user)
+        self.account = Account.objects.create(
+            user=self.user, name='CC Principal', account_type='checking', initial_balance=2500,
+        )
+
+    def test_no_preference_returns_null_checking_fields(self):
+        resp = self.client.get('/api/dashboard/summary/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertIsNone(resp.data['checking_account_id'])
+        self.assertIsNone(resp.data['checking_account_balance'])
+
+    def test_preference_returns_checking_balance(self):
+        from apps.preferences.models import UserPreference
+        UserPreference.objects.create(user=self.user, primary_account=self.account)
+        resp = self.client.get('/api/dashboard/summary/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['checking_account_id'], self.account.id)
+        self.assertAlmostEqual(resp.data['checking_account_balance'], 2500.0, places=1)

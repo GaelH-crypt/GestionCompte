@@ -16,6 +16,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/simulations': 'Simulations',
   '/bank-sync': 'Synchronisation bancaire',
   '/bank-sync/callback': 'Connexion bancaire',
+  '/settings': 'Paramètres',
 }
 
 export default function AppLayout() {

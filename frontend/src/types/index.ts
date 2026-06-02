@@ -188,6 +188,8 @@ export interface DashboardSummary {
   total_recurring_expenses: number
   expenses_by_category: ExpenseByCategory[]
   upcoming_deadlines: UpcomingDeadline[]
+  checking_account_id: number | null
+  checking_account_balance: number | null
 }
 
 export interface BalanceHistoryItem {
@@ -210,6 +212,8 @@ export interface ProjectionPoint {
   baseline_balance?: number
   delta?: number
   events?: { label: string; amount: number; kind: string }[]
+  checking_balance?: number | null
+  checking_start_balance?: number
 }
 
 export interface SimulationExpenseItem {
@@ -224,6 +228,13 @@ export interface SimulationParams {
   expenses?: number
   credits?: number
   extra_expenses?: Pick<SimulationExpenseItem, 'label' | 'amount'>[]
+}
+
+// ─── Preferences ───────────────────────────────────────────────────────────
+
+export interface UserPreference {
+  primary_account: number | null
+  primary_account_name: string | null
 }
 
 // ─── API ───────────────────────────────────────────────────────────────────

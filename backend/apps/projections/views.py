@@ -6,7 +6,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 
-from .engine import build_engine_from_user
+from apps.preferences.models import UserPreference
+from .engine import build_engine_from_user, build_engine_for_account
 
 VALID_HORIZONS = {1, 3, 6, 12, 60}
 
@@ -20,14 +21,38 @@ def projection_view(request):
         return Response({'error': 'months must be an integer'}, status=status.HTTP_400_BAD_REQUEST)
     if months not in VALID_HORIZONS:
         return Response({'error': 'months must be 1, 3, 6, 12 or 60'}, status=status.HTTP_400_BAD_REQUEST)
+
     engine = build_engine_from_user(request.user)
-    # 1-month horizon: return a day-by-day projection for maximum precision on
-    # intra-month balance fluctuations.
+
+    pref = UserPreference.objects.filter(
+        user=request.user, primary_account__isnull=False, primary_account__is_active=True
+    ).select_related('primary_account').first()
+    checking_engine = build_engine_for_account(request.user, pref.primary_account_id) if pref else None
+
     if months == 1:
         today = date.today()
         days = (today + relativedelta(months=1) - today).days
-        return Response(engine.project_daily(days))
-    return Response(engine.project(months))
+        result = engine.project_daily(days)
+        if checking_engine:
+            checking_result = checking_engine.project_daily(days)
+            result[0]['checking_start_balance'] = float(checking_engine.current_balance)
+            for row, crow in zip(result, checking_result):
+                row['checking_balance'] = crow['balance']
+        else:
+            for row in result:
+                row['checking_balance'] = None
+        return Response(result)
+
+    result = engine.project(months)
+    if checking_engine:
+        checking_result = checking_engine.project(months)
+        result[0]['checking_start_balance'] = float(checking_engine.current_balance)
+        for row, crow in zip(result, checking_result):
+            row['checking_balance'] = crow['balance']
+    else:
+        for row in result:
+            row['checking_balance'] = None
+    return Response(result)
 
 
 @api_view(['POST'])

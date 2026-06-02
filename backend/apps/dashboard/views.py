@@ -11,6 +11,7 @@ from apps.categories.models import Category
 from apps.transactions.models import Transaction
 from apps.credits.models import Credit, CreditDraw
 from apps.recurring.models import RecurringTransaction
+from apps.preferences.models import UserPreference
 
 
 @api_view(['GET'])
@@ -87,6 +88,13 @@ def dashboard_summary(request):
         item['next_occurrence'] = str(item['next_occurrence'])
         item['amount'] = str(item['amount'])
 
+    pref = UserPreference.objects.filter(user=user).select_related('primary_account').first()
+    checking_account_id = None
+    checking_account_balance = None
+    if pref and pref.primary_account and pref.primary_account.is_active:
+        checking_account_id = pref.primary_account.id
+        checking_account_balance = float(get_account_balance(pref.primary_account))
+
     return Response({
         'total_balance': float(total_balance),
         'accounts': accounts_data,
@@ -97,6 +105,8 @@ def dashboard_summary(request):
         'total_recurring_expenses': total_recurring,
         'expenses_by_category': expenses_by_category,
         'upcoming_deadlines': upcoming_recurring,
+        'checking_account_id': checking_account_id,
+        'checking_account_balance': checking_account_balance,
     })
 
 

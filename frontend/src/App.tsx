@@ -17,6 +17,7 @@ const ProjectionsPage = lazy(() => import('@/pages/ProjectionsPage'))
 const SimulationsPage = lazy(() => import('@/pages/SimulationsPage'))
 const BankSyncPage = lazy(() => import('@/pages/BankSyncPage'))
 const BankSyncCallbackPage = lazy(() => import('@/pages/BankSyncCallbackPage'))
+const SettingsPage = lazy(() => import('@/pages/SettingsPage'))
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated())
@@ -122,6 +123,14 @@ export default function App() {
             element={
               <Suspense fallback={<PageSpinner />}>
                 <BankSyncCallbackPage />
+              </Suspense>
+            }
+          />
+          <Route
+            path="settings"
+            element={
+              <Suspense fallback={<PageSpinner />}>
+                <SettingsPage />
               </Suspense>
             }
           />

@@ -254,3 +254,54 @@ class BuildEngineFromUserTest(TestCase):
             len(nounou_events_this_month), 0,
             "Nounou must not appear in current month via explicit link",
         )
+
+
+class BuildEngineForAccountTest(TestCase):
+    def setUp(self):
+        from apps.accounts.models import Account
+        self.user = User.objects.create_user('enguser', password='p')
+        self.account = Account.objects.create(
+            user=self.user, name='CC', account_type='checking', initial_balance=3000,
+        )
+        self.other = Account.objects.create(
+            user=self.user, name='Épargne', account_type='savings', initial_balance=10000,
+        )
+
+    def test_engine_starts_with_single_account_balance(self):
+        from apps.projections.engine import build_engine_for_account
+        engine = build_engine_for_account(self.user, self.account.id)
+        self.assertAlmostEqual(float(engine.current_balance), 3000.0, places=1)
+
+    def test_engine_only_counts_account_recurring(self):
+        from apps.recurring.models import RecurringTransaction
+        import datetime
+        RecurringTransaction.objects.create(
+            user=self.user, name='Salaire', amount=2000, transaction_type='income',
+            frequency='monthly', next_occurrence=datetime.date.today(), account=self.account,
+        )
+        RecurringTransaction.objects.create(
+            user=self.user, name='Virement épargne', amount=500, transaction_type='income',
+            frequency='monthly', next_occurrence=datetime.date.today(), account=self.other,
+        )
+        from apps.projections.engine import build_engine_for_account
+        engine = build_engine_for_account(self.user, self.account.id)
+        self.assertAlmostEqual(float(engine.monthly_income), 2000.0, places=1)
+
+    def test_projection_view_includes_checking_balance_when_configured(self):
+        from apps.preferences.models import UserPreference
+        from rest_framework.test import APIClient
+        UserPreference.objects.create(user=self.user, primary_account=self.account)
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+        resp = client.get('/api/projections/?months=3')
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('checking_balance', resp.data[0])
+        self.assertIsNotNone(resp.data[0]['checking_balance'])
+
+    def test_projection_view_no_checking_balance_when_not_configured(self):
+        from rest_framework.test import APIClient
+        client = APIClient()
+        client.force_authenticate(user=self.user)
+        resp = client.get('/api/projections/?months=3')
+        self.assertEqual(resp.status_code, 200)
+        self.assertIsNone(resp.data[0].get('checking_balance'))
