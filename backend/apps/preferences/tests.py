@@ -49,6 +49,17 @@ class PreferencesAPITest(TestCase):
         pref = UserPreference.objects.get(user=self.user)
         self.assertIsNone(pref.primary_account)
 
+    def test_patch_rejects_non_checking_account(self):
+        savings = Account.objects.create(
+            user=self.user, name='Épargne', account_type='savings', initial_balance=5000,
+        )
+        resp = self.client.patch('/api/preferences/', {'primary_account': savings.id}, format='json')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_patch_rejects_missing_primary_account_key(self):
+        resp = self.client.patch('/api/preferences/', {}, format='json')
+        self.assertEqual(resp.status_code, 400)
+
     def test_unauthenticated_returns_401(self):
         unauth = APIClient()
         resp = unauth.get('/api/preferences/')
