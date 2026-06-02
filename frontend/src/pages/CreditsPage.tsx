@@ -15,6 +15,9 @@ const formatEur = (n: number | string) =>
   new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(parseFloat(String(n)))
 
 function computeMonthlyBreakdown(credit: Credit) {
+  if (!credit.remaining_capital || !credit.interest_rate || !credit.monthly_payment) {
+    return { interest: 0, capital: 0, insurance: parseFloat(credit.insurance_monthly) }
+  }
   const monthlyRate = parseFloat(credit.interest_rate) / 1200
   const interest = parseFloat(credit.remaining_capital) * monthlyRate
   const capital = parseFloat(credit.monthly_payment) - interest
@@ -30,6 +33,7 @@ const CREDIT_TYPE_LABELS: Record<CreditType, string> = {
   mortgage: 'Immobilier',
   auto: 'Auto',
   consumer: 'Consommation',
+  revolving: 'Revolving',
   other: 'Autre',
 }
 
@@ -61,7 +65,7 @@ export default function CreditsPage() {
 
   const credits = data ?? []
   const totalMonthly = credits.reduce((s, c) => s + c.total_monthly_charge, 0)
-  const totalRemaining = credits.reduce((s, c) => s + parseFloat(c.remaining_capital), 0)
+  const totalRemaining = credits.reduce((s, c) => s + parseFloat(c.remaining_capital ?? '0'), 0)
 
   return (
     <div className="space-y-6">
@@ -89,9 +93,9 @@ export default function CreditsPage() {
       {/* Credit cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {credits.map((credit) => {
-          const pct = Math.round(
-            (1 - parseFloat(credit.remaining_capital) / parseFloat(credit.initial_capital)) * 100
-          )
+          const pct = credit.remaining_capital && credit.initial_capital
+            ? Math.round((1 - parseFloat(credit.remaining_capital) / parseFloat(credit.initial_capital)) * 100)
+            : 0
           return (
             <Card key={credit.id}>
               <div className="flex items-start justify-between mb-4">
@@ -105,9 +109,11 @@ export default function CreditsPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
-                  <span className="text-xs bg-gray-800 text-gray-400 px-2 py-1 rounded-lg mr-1">
-                    {credit.interest_rate}%
-                  </span>
+                  {credit.interest_rate != null && (
+                    <span className="text-xs bg-gray-800 text-gray-400 px-2 py-1 rounded-lg mr-1">
+                      {credit.interest_rate}%
+                    </span>
+                  )}
                   <button
                     onClick={() => { setEditing(credit); setShowForm(true) }}
                     className="p-1.5 text-gray-500 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
@@ -128,10 +134,12 @@ export default function CreditsPage() {
               </div>
 
               <div className="space-y-2 mb-4">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">Capital restant</span>
-                  <span className="text-white font-medium">{formatEur(credit.remaining_capital)}</span>
-                </div>
+                {credit.remaining_capital != null && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">Capital restant</span>
+                    <span className="text-white font-medium">{formatEur(credit.remaining_capital)}</span>
+                  </div>
+                )}
                 {(() => {
                   const bd = computeMonthlyBreakdown(credit)
                   return (
@@ -157,16 +165,20 @@ export default function CreditsPage() {
                     </>
                   )
                 })()}
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">Fin estimée</span>
-                  <span className="text-white">
-                    {format(new Date(credit.estimated_end_date), 'MMM yyyy', { locale: fr })}
-                  </span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">Coût total</span>
-                  <span className="text-gray-300">{formatEur(credit.total_cost)}</span>
-                </div>
+                {credit.estimated_end_date && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">Fin estimée</span>
+                    <span className="text-white">
+                      {format(new Date(credit.estimated_end_date), 'MMM yyyy', { locale: fr })}
+                    </span>
+                  </div>
+                )}
+                {credit.total_cost != null && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400">Coût total</span>
+                    <span className="text-gray-300">{formatEur(credit.total_cost)}</span>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-1">
@@ -177,7 +189,9 @@ export default function CreditsPage() {
                 <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
                   <div className="h-full bg-brand-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
                 </div>
-                <p className="text-xs text-gray-500">{credit.remaining_months} mois restants</p>
+                {credit.remaining_months != null && (
+                  <p className="text-xs text-gray-500">{credit.remaining_months} mois restants</p>
+                )}
               </div>
 
               {(() => {
@@ -236,12 +250,12 @@ const sel =
 function CreditFormModal({ credit, onClose, onSaved }: CreditFormModalProps) {
   const [name, setName] = useState(credit?.name ?? '')
   const [creditType, setCreditType] = useState<CreditType>(credit?.credit_type ?? 'consumer')
-  const [initialCapital, setInitialCapital] = useState(credit?.initial_capital ?? '0')
-  const [remainingCapital, setRemainingCapital] = useState(credit?.remaining_capital ?? '0')
-  const [interestRate, setInterestRate] = useState(credit?.interest_rate ?? '0')
-  const [monthlyPayment, setMonthlyPayment] = useState(credit?.monthly_payment ?? '0')
+  const [initialCapital, setInitialCapital] = useState(credit?.initial_capital ?? '')
+  const [remainingCapital, setRemainingCapital] = useState(credit?.remaining_capital ?? '')
+  const [interestRate, setInterestRate] = useState(credit?.interest_rate ?? '')
+  const [monthlyPayment, setMonthlyPayment] = useState(credit?.monthly_payment ?? '')
   const [insuranceMonthly, setInsuranceMonthly] = useState(credit?.insurance_monthly ?? '0')
-  const [durationMonths, setDurationMonths] = useState(String(credit?.duration_months ?? ''))
+  const [durationMonths, setDurationMonths] = useState(credit?.duration_months != null ? String(credit.duration_months) : '')
   const [startDate, setStartDate] = useState(credit?.start_date ?? '')
   const [endDate, setEndDate] = useState(credit?.end_date ?? '')
   const [earlyRepayment, setEarlyRepayment] = useState(credit?.early_repayment_possible ?? true)
