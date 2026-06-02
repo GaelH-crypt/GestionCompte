@@ -105,6 +105,19 @@ class RevolvingCreditTest(TestCase):
         }, format='json')
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
+    def test_create_draw_exceeding_max_amount_rejected(self):
+        credit = self._make_revolving()
+        CreditDraw.objects.create(
+            credit=credit, amount='800.00', monthly_payment='140.00',
+            duration_months=6, start_date=datetime.date(2024, 2, 1),
+        )
+        resp = self.client.post(f'/api/credits/{credit.id}/draws/', {
+            'amount': '300.00', 'monthly_payment': '52.50',
+            'duration_months': 6, 'start_date': '2024-03-01',
+        }, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('amount', resp.data)
+
     def test_revolving_total_monthly_charge_sums_active_draws(self):
         credit = self._make_revolving()
         CreditDraw.objects.create(

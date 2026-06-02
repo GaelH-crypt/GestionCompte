@@ -33,5 +33,12 @@ class CreditDrawViewSet(viewsets.ModelViewSet):
         )
 
     def perform_create(self, serializer):
+        from decimal import Decimal
+        from rest_framework.exceptions import ValidationError
         credit = get_object_or_404(Credit, pk=self.kwargs['credit_pk'], user=self.request.user)
+        if credit.max_amount is not None:
+            used = sum(d.amount for d in credit.draws.filter(is_active=True))
+            available = Decimal(str(credit.max_amount)) - used
+            if Decimal(str(serializer.validated_data['amount'])) > available:
+                raise ValidationError({'amount': f'Dépasse le plafond disponible ({available} € restants).'})
         serializer.save(credit=credit)

@@ -125,7 +125,7 @@ def build_engine_from_user(user, overrides: dict = None) -> ProjectionEngine:
     from django.db.models import Sum
     from apps.accounts.models import Account
     from apps.accounts.services import get_account_balance
-    from apps.credits.models import Credit
+    from apps.credits.models import Credit, CreditDraw
     from apps.recurring.models import RecurringTransaction
 
     accounts = Account.objects.filter(user=user, is_active=True).exclude(account_type='credit')
@@ -175,14 +175,15 @@ def build_engine_from_user(user, overrides: dict = None) -> ProjectionEngine:
             transaction_type='expense', frequency__in=('monthly', 'weekly'),
         ).values_list('credit_id', flat=True).distinct()
     )
-    credit_agg = Credit.objects.filter(
-        user=user, is_active=True
-    ).exclude(
-        id__in=covered_credit_ids
-    ).aggregate(
+    uncovered = Credit.objects.filter(user=user, is_active=True).exclude(id__in=covered_credit_ids)
+    credit_agg = uncovered.exclude(credit_type='revolving').aggregate(
         p=Sum('monthly_payment'), ins=Sum('insurance_monthly')
     )
     monthly_credits = (credit_agg['p'] or Decimal('0')) + (credit_agg['ins'] or Decimal('0'))
+    revolving_draws = CreditDraw.objects.filter(
+        credit__in=uncovered.filter(credit_type='revolving'), is_active=True,
+    ).aggregate(t=Sum('monthly_payment'))['t']
+    monthly_credits += (revolving_draws or Decimal('0'))
 
     # Day-by-day cashflow events for the fine-grained (1-month) projection: place
     # every recurrence and credit charge on its real date. ~2 months covers the
@@ -237,14 +238,19 @@ def build_engine_from_user(user, overrides: dict = None) -> ProjectionEngine:
 
     # Credits not already covered by a recurring expense (same rule as monthly_credits),
     # charged on their start-date day-of-month each month within the window.
-    for credit in Credit.objects.filter(
-        user=user, is_active=True
-    ).exclude(id__in=covered_credit_ids):
+    for credit in uncovered.exclude(credit_type='revolving'):
         amount = (credit.monthly_payment or Decimal('0')) + (credit.insurance_monthly or Decimal('0'))
         if amount == 0:
             continue
         for pay_date in _monthly_charge_dates(credit.start_date.day, today, daily_end):
             daily_events.append({'date': pay_date, 'amount': amount, 'kind': 'credits', 'label': credit.name})
+
+    for credit in uncovered.filter(credit_type='revolving').prefetch_related('draws'):
+        amount = sum(d.monthly_payment for d in credit.draws.all() if d.is_active)
+        if not amount:
+            continue
+        for pay_date in _monthly_charge_dates(credit.start_date.day, today, daily_end):
+            daily_events.append({'date': pay_date, 'amount': Decimal(str(amount)), 'kind': 'credits', 'label': credit.name})
 
     decimal_overrides = {}
     if overrides:
