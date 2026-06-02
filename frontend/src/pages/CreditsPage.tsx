@@ -37,6 +37,24 @@ const CREDIT_TYPE_LABELS: Record<CreditType, string> = {
   other: 'Autre',
 }
 
+function CapacityBar({ used, max }: { used: number; max: number }) {
+  const pct = max > 0 ? Math.min((used / max) * 100, 100) : 0
+  return (
+    <div>
+      <div className="flex justify-between text-xs text-gray-400 mb-1">
+        <span>{new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(used)} utilisés</span>
+        <span>max {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(max)}</span>
+      </div>
+      <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+        <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+      </div>
+      <p className="text-xs text-gray-400 mt-1">
+        {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(max - used)} disponibles
+      </p>
+    </div>
+  )
+}
+
 export default function CreditsPage() {
   const qc = useQueryClient()
   const [showForm, setShowForm] = useState(false)
@@ -53,6 +71,30 @@ export default function CreditsPage() {
       qc.invalidateQueries({ queryKey: ['credits'] })
       qc.invalidateQueries({ queryKey: ['dashboard'] })
     },
+  })
+
+  const [showDrawForm, setShowDrawForm] = useState<number | null>(null)
+  const [drawForm, setDrawForm] = useState({ amount: '', monthly_payment: '', duration_months: '', start_date: '' })
+
+  const createDrawMut = useMutation({
+    mutationFn: ({ creditId, data }: { creditId: number; data: typeof drawForm }) =>
+      creditsApi.draws.create(creditId, {
+        amount: data.amount,
+        monthly_payment: data.monthly_payment,
+        duration_months: Number(data.duration_months),
+        start_date: data.start_date,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['credits'] })
+      setShowDrawForm(null)
+      setDrawForm({ amount: '', monthly_payment: '', duration_months: '', start_date: '' })
+    },
+  })
+
+  const deleteDrawMut = useMutation({
+    mutationFn: ({ creditId, drawId }: { creditId: number; drawId: number }) =>
+      creditsApi.draws.delete(creditId, drawId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['credits'] }),
   })
 
   const { data: recurringData } = useQuery({
@@ -194,6 +236,93 @@ export default function CreditsPage() {
                 )}
               </div>
 
+              {/* Revolving section */}
+              {credit.credit_type === 'revolving' && credit.max_amount != null && (
+                <div className="mt-4 space-y-3 border-t border-gray-700 pt-3">
+                  <CapacityBar
+                    used={parseFloat(credit.max_amount) - (credit.available_capacity ?? 0)}
+                    max={parseFloat(credit.max_amount)}
+                  />
+
+                  {credit.draws.filter(d => d.is_active).length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">Tirages actifs</p>
+                      {credit.draws.filter(d => d.is_active).map((draw) => (
+                        <div key={draw.id} className="flex items-center justify-between bg-gray-800/50 rounded-lg px-3 py-2">
+                          <div>
+                            <p className="text-sm text-white font-medium">{formatEur(draw.amount)}</p>
+                            <p className="text-xs text-gray-500">{draw.duration_months} mois · {formatEur(draw.monthly_payment)}/mois</p>
+                          </div>
+                          <button
+                            onClick={() => deleteDrawMut.mutate({ creditId: credit.id, drawId: draw.id })}
+                            className="p-1 text-gray-500 hover:text-red-400 transition-colors"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {showDrawForm === credit.id ? (
+                    <div className="space-y-2 border border-gray-700 rounded-lg p-3">
+                      <p className="text-xs font-medium text-gray-400">Nouveau tirage</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input
+                          type="number"
+                          placeholder="Montant (€)"
+                          value={drawForm.amount}
+                          onChange={(e) => setDrawForm({ ...drawForm, amount: e.target.value })}
+                        />
+                        <Input
+                          type="number"
+                          placeholder="Mensualité (€)"
+                          value={drawForm.monthly_payment}
+                          onChange={(e) => setDrawForm({ ...drawForm, monthly_payment: e.target.value })}
+                        />
+                        <Input
+                          type="number"
+                          placeholder="Durée (mois)"
+                          value={drawForm.duration_months}
+                          onChange={(e) => setDrawForm({ ...drawForm, duration_months: e.target.value })}
+                        />
+                        <Input
+                          type="date"
+                          value={drawForm.start_date}
+                          onChange={(e) => setDrawForm({ ...drawForm, start_date: e.target.value })}
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => createDrawMut.mutate({ creditId: credit.id, data: drawForm })}
+                          disabled={!drawForm.amount || !drawForm.monthly_payment || !drawForm.duration_months || !drawForm.start_date || createDrawMut.isPending}
+                        >
+                          Ajouter
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setShowDrawForm(null)}>Annuler</Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setShowDrawForm(credit.id)}
+                      className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors"
+                    >
+                      <Plus className="h-3 w-3" /> Ajouter un tirage
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Linked bank accounts */}
+              {credit.linked_accounts.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-gray-700">
+                  <p className="text-xs text-gray-500">
+                    Compte bancaire : {credit.linked_accounts.map(a => a.name).join(', ')}
+                  </p>
+                </div>
+              )}
+
               {(() => {
                 const linked = allRecurring.filter((r) => r.credit === credit.id)
                 if (linked.length === 0) return null
@@ -250,6 +379,7 @@ const sel =
 function CreditFormModal({ credit, onClose, onSaved }: CreditFormModalProps) {
   const [name, setName] = useState(credit?.name ?? '')
   const [creditType, setCreditType] = useState<CreditType>(credit?.credit_type ?? 'consumer')
+  const [maxAmount, setMaxAmount] = useState<string>(credit?.max_amount ?? '')
   const [initialCapital, setInitialCapital] = useState(credit?.initial_capital ?? '')
   const [remainingCapital, setRemainingCapital] = useState(credit?.remaining_capital ?? '')
   const [interestRate, setInterestRate] = useState(credit?.interest_rate ?? '')
@@ -272,12 +402,13 @@ function CreditFormModal({ credit, onClose, onSaved }: CreditFormModalProps) {
       const payload = {
         name,
         credit_type: creditType,
-        initial_capital: initialCapital,
-        remaining_capital: remainingCapital,
-        interest_rate: interestRate,
-        monthly_payment: monthlyPayment,
+        max_amount: creditType === 'revolving' ? (maxAmount || null) : null,
+        initial_capital: creditType !== 'revolving' ? initialCapital : undefined,
+        remaining_capital: creditType !== 'revolving' ? remainingCapital : undefined,
+        interest_rate: creditType !== 'revolving' ? interestRate : undefined,
+        monthly_payment: creditType !== 'revolving' ? monthlyPayment : undefined,
         insurance_monthly: insuranceMonthly || '0',
-        duration_months: Number(durationMonths),
+        duration_months: creditType !== 'revolving' ? Number(durationMonths) : undefined,
         start_date: startDate,
         end_date: endDate || null,
         early_repayment_possible: earlyRepayment,
@@ -315,76 +446,93 @@ function CreditFormModal({ credit, onClose, onSaved }: CreditFormModalProps) {
               <option value="mortgage">Immobilier</option>
               <option value="auto">Auto</option>
               <option value="consumer">Consommation</option>
+              <option value="revolving">Revolving</option>
               <option value="other">Autre</option>
             </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          {creditType === 'revolving' && (
             <Input
-              label="Capital initial (€)"
+              label="Plafond du crédit (€)"
               type="number"
               step="0.01"
               min="0"
-              value={initialCapital}
-              onChange={(e) => setInitialCapital(e.target.value)}
-              required
-              placeholder="150000"
+              value={maxAmount}
+              onChange={(e) => setMaxAmount(e.target.value)}
+              placeholder="5000"
             />
-            <Input
-              label="Capital restant (€)"
-              type="number"
-              step="0.01"
-              min="0"
-              value={remainingCapital}
-              onChange={(e) => setRemainingCapital(e.target.value)}
-              required
-              placeholder="120000"
-            />
-          </div>
+          )}
 
-          <div className="grid grid-cols-2 gap-3">
-            <Input
-              label="Taux d'intérêt (%)"
-              type="number"
-              step="0.01"
-              min="0"
-              value={interestRate}
-              onChange={(e) => setInterestRate(e.target.value)}
-              required
-              placeholder="1.85"
-            />
-            <Input
-              label="Mensualité hors assurance (€)"
-              type="number"
-              step="0.01"
-              min="0"
-              value={monthlyPayment}
-              onChange={(e) => setMonthlyPayment(e.target.value)}
-              required
-              placeholder="750"
-            />
-          </div>
+          {creditType !== 'revolving' && (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  label="Capital initial (€)"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={initialCapital}
+                  onChange={(e) => setInitialCapital(e.target.value)}
+                  required
+                  placeholder="150000"
+                />
+                <Input
+                  label="Capital restant (€)"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={remainingCapital}
+                  onChange={(e) => setRemainingCapital(e.target.value)}
+                  required
+                  placeholder="120000"
+                />
+              </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <Input
-              label="Assurance mensuelle (€)"
-              type="number"
-              step="0.01"
-              min="0"
-              value={insuranceMonthly}
-              onChange={(e) => setInsuranceMonthly(e.target.value)}
-              placeholder="0"
-            />
-            <Input
-              label="Durée totale (mois)"
-              type="number"
-              min="1"
-              value={durationMonths}
-              onChange={(e) => setDurationMonths(e.target.value)}
-              required
-              placeholder="240"
-            />
-          </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  label="Taux d'intérêt (%)"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={interestRate}
+                  onChange={(e) => setInterestRate(e.target.value)}
+                  required
+                  placeholder="1.85"
+                />
+                <Input
+                  label="Mensualité hors assurance (€)"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={monthlyPayment}
+                  onChange={(e) => setMonthlyPayment(e.target.value)}
+                  required
+                  placeholder="750"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  label="Assurance mensuelle (€)"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={insuranceMonthly}
+                  onChange={(e) => setInsuranceMonthly(e.target.value)}
+                  placeholder="0"
+                />
+                <Input
+                  label="Durée totale (mois)"
+                  type="number"
+                  min="1"
+                  value={durationMonths}
+                  onChange={(e) => setDurationMonths(e.target.value)}
+                  required
+                  placeholder="240"
+                />
+              </div>
+            </>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <Input
