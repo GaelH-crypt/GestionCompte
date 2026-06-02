@@ -3,8 +3,14 @@ from datetime import date
 from dateutil.relativedelta import relativedelta
 
 
+def _missing_fields(credit):
+    return any(
+        f is None for f in [credit.remaining_capital, credit.interest_rate, credit.monthly_payment]
+    )
+
+
 def calculate_credit_details(credit) -> dict:
-    if credit.credit_type == 'revolving' or credit.remaining_capital is None:
+    if credit.credit_type == 'revolving' or _missing_fields(credit):
         return {
             'remaining_months': None,
             'total_interest': None,
@@ -42,7 +48,7 @@ def calculate_credit_details(credit) -> dict:
 
 
 def generate_schedule(credit, max_months: int = 12) -> list:
-    if credit.credit_type == 'revolving' or credit.remaining_capital is None:
+    if credit.credit_type == 'revolving' or _missing_fields(credit):
         return []
     monthly_rate = Decimal(str(credit.interest_rate)) / Decimal('1200')
     capital = Decimal(str(credit.remaining_capital))
