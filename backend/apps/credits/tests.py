@@ -92,3 +92,29 @@ class RevolvingCreditTest(TestCase):
         )
         resp = self.client.delete(f'/api/credits/{credit.id}/draws/{draw.id}/')
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+
+    def test_create_draw_on_other_user_credit_returns_404(self):
+        other_user = User.objects.create_user('other_rev', password='p')
+        other_credit = Credit.objects.create(
+            user=other_user, name='Other Revolving', credit_type='revolving',
+            max_amount='500.00', start_date=datetime.date(2024, 1, 1),
+        )
+        resp = self.client.post(f'/api/credits/{other_credit.id}/draws/', {
+            'amount': '100.00', 'monthly_payment': '20.00',
+            'duration_months': 5, 'start_date': '2024-02-01',
+        }, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_revolving_total_monthly_charge_sums_active_draws(self):
+        credit = self._make_revolving()
+        CreditDraw.objects.create(
+            credit=credit, amount='300.00', monthly_payment='52.50',
+            duration_months=6, start_date=datetime.date(2024, 2, 1),
+        )
+        CreditDraw.objects.create(
+            credit=credit, amount='200.00', monthly_payment='35.00',
+            duration_months=6, start_date=datetime.date(2024, 3, 1),
+        )
+        resp = self.client.get(f'/api/credits/{credit.id}/')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertAlmostEqual(float(resp.data['total_monthly_charge']), 87.50)

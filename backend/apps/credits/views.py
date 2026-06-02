@@ -1,3 +1,4 @@
+from django.shortcuts import get_object_or_404
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -32,5 +33,5 @@ class CreditDrawViewSet(viewsets.ModelViewSet):
         )
 
     def perform_create(self, serializer):
-        credit = Credit.objects.get(pk=self.kwargs['credit_pk'], user=self.request.user)
+        credit = get_object_or_404(Credit, pk=self.kwargs['credit_pk'], user=self.request.user)
         serializer.save(credit=credit)

@@ -11,11 +11,14 @@ def _missing_fields(credit):
 
 def calculate_credit_details(credit) -> dict:
     if credit.credit_type == 'revolving' or _missing_fields(credit):
+        revolving_monthly = sum(
+            d.monthly_payment for d in credit.draws.filter(is_active=True)
+        ) if credit.credit_type == 'revolving' else 0
         return {
             'remaining_months': None,
             'total_interest': None,
             'total_cost': None,
-            'total_monthly_charge': 0,
+            'total_monthly_charge': float(revolving_monthly),
             'estimated_end_date': None,
         }
 
