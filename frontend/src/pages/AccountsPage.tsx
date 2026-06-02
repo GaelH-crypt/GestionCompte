@@ -209,7 +209,7 @@ function AccountFormModal({ account, credits, onClose, onSaved }: AccountFormMod
           />
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium text-gray-400">Type</label>
-            <select value={type} onChange={(e) => setType(e.target.value as AccountType)} className={sel}>
+            <select value={type} onChange={(e) => { setType(e.target.value as AccountType); if (e.target.value !== 'credit') setLinkedCredit(null) }} className={sel}>
               <option value="checking">Courant</option>
               <option value="savings">Épargne</option>
               <option value="cash">Espèces</option>
