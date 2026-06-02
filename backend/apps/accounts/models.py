@@ -7,6 +7,7 @@ class Account(models.Model):
         ('checking', 'Courant'),
         ('savings', 'Épargne'),
         ('cash', 'Espèces'),
+        ('credit', 'Crédit'),
         ('other', 'Autre'),
     ]
 
@@ -17,6 +18,14 @@ class Account(models.Model):
     color = models.CharField(max_length=7, default='#6366f1')
     icon = models.CharField(max_length=50, default='CreditCard')
     is_active = models.BooleanField(default=True)
+    is_import_ignored = models.BooleanField(default=False)
+    linked_credit = models.ForeignKey(
+        'credits.Credit',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='accounts',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Pencil, Trash2, CreditCard } from 'lucide-react'
+import { Plus, Pencil, Trash2, CreditCard, EyeOff } from 'lucide-react'
 import { accountsApi } from '@/api/accounts'
+import { creditsApi } from '@/api/credits'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { PageSpinner } from '@/components/ui/Spinner'
-import type { Account, AccountType } from '@/types'
+import type { Account, AccountType, Credit } from '@/types'
 
 const formatEur = (n: number | string) =>
   new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(parseFloat(String(n)))
@@ -15,6 +16,7 @@ const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
   checking: 'Courant',
   savings: 'Épargne',
   cash: 'Espèces',
+  credit: 'Crédit',
   other: 'Autre',
 }
 
@@ -30,6 +32,18 @@ export default function AccountsPage() {
 
   const deleteMut = useMutation({
     mutationFn: accountsApi.delete,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['accounts'] }),
+  })
+
+  const { data: creditsData } = useQuery({
+    queryKey: ['credits'],
+    queryFn: () => creditsApi.list().then((r) => r.data.results),
+  })
+  const credits = creditsData ?? []
+
+  const ignoreMut = useMutation({
+    mutationFn: ({ id, value }: { id: number; value: boolean }) =>
+      accountsApi.update(id, { is_import_ignored: value }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['accounts'] }),
   })
 
@@ -64,9 +78,32 @@ export default function AccountsPage() {
                 <div>
                   <p className="font-semibold text-white">{account.name}</p>
                   <p className="text-xs text-gray-500">{ACCOUNT_TYPE_LABELS[account.account_type]}</p>
+                  <div className="flex gap-1 mt-1 flex-wrap">
+                    {account.is_import_ignored && (
+                      <span className="text-xs text-orange-400 bg-orange-400/10 px-1.5 py-0.5 rounded">
+                        Ignoré à l'import
+                      </span>
+                    )}
+                    {account.account_type === 'credit' && (
+                      <span className="text-xs text-blue-400 bg-blue-400/10 px-1.5 py-0.5 rounded">
+                        Compte crédit
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
               <div className="flex gap-1">
+                <button
+                  onClick={() => ignoreMut.mutate({ id: account.id, value: !account.is_import_ignored })}
+                  title={account.is_import_ignored ? "Réactiver à l'import" : "Ignorer à l'import"}
+                  className={`p-1.5 rounded-lg transition-colors ${
+                    account.is_import_ignored
+                      ? 'text-orange-400 hover:text-orange-300 hover:bg-gray-800'
+                      : 'text-gray-500 hover:text-white hover:bg-gray-800'
+                  }`}
+                >
+                  <EyeOff className="h-4 w-4" />
+                </button>
                 <button
                   onClick={() => { setEditing(account); setShowForm(true) }}
                   className="p-1.5 text-gray-500 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
@@ -109,6 +146,7 @@ export default function AccountsPage() {
       {showForm && (
         <AccountFormModal
           account={editing}
+          credits={credits}
           onClose={() => setShowForm(false)}
           onSaved={() => {
             setShowForm(false)
@@ -122,15 +160,17 @@ export default function AccountsPage() {
 
 interface AccountFormModalProps {
   account: Account | null
+  credits: Credit[]
   onClose: () => void
   onSaved: () => void
 }
 
-function AccountFormModal({ account, onClose, onSaved }: AccountFormModalProps) {
+function AccountFormModal({ account, credits, onClose, onSaved }: AccountFormModalProps) {
   const [name, setName] = useState(account?.name ?? '')
   const [type, setType] = useState<AccountType>(account?.account_type ?? 'checking')
   const [balance, setBalance] = useState(account?.initial_balance ?? '0')
   const [color, setColor] = useState(account?.color ?? '#6366f1')
+  const [linkedCredit, setLinkedCredit] = useState<number | null>(account?.linked_credit ?? null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -142,7 +182,7 @@ function AccountFormModal({ account, onClose, onSaved }: AccountFormModalProps) 
     setLoading(true)
     setError('')
     try {
-      const payload = { name, account_type: type, initial_balance: balance, color, icon: 'CreditCard' }
+      const payload = { name, account_type: type, initial_balance: balance, color, icon: 'CreditCard', linked_credit: linkedCredit }
       if (account) await accountsApi.update(account.id, payload)
       else await accountsApi.create(payload)
       onSaved()
@@ -169,13 +209,29 @@ function AccountFormModal({ account, onClose, onSaved }: AccountFormModalProps) 
           />
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium text-gray-400">Type</label>
-            <select value={type} onChange={(e) => setType(e.target.value as AccountType)} className={sel}>
+            <select value={type} onChange={(e) => { setType(e.target.value as AccountType); if (e.target.value !== 'credit') setLinkedCredit(null) }} className={sel}>
               <option value="checking">Courant</option>
               <option value="savings">Épargne</option>
               <option value="cash">Espèces</option>
+              <option value="credit">Crédit</option>
               <option value="other">Autre</option>
             </select>
           </div>
+          {type === 'credit' && (
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium text-gray-400">Crédit associé</label>
+              <select
+                className={sel}
+                value={linkedCredit ?? ''}
+                onChange={(e) => setLinkedCredit(e.target.value ? Number(e.target.value) : null)}
+              >
+                <option value="">— Aucun —</option>
+                {credits.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <Input
             label="Solde initial (€)"
             type="number"

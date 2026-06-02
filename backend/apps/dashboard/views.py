@@ -9,7 +9,7 @@ from apps.accounts.models import Account
 from apps.accounts.services import get_account_balance
 from apps.categories.models import Category
 from apps.transactions.models import Transaction
-from apps.credits.models import Credit
+from apps.credits.models import Credit, CreditDraw
 from apps.recurring.models import RecurringTransaction
 
 
@@ -20,7 +20,7 @@ def dashboard_summary(request):
     today = date.today()
     first_of_month = today.replace(day=1)
 
-    accounts = Account.objects.filter(user=user, is_active=True)
+    accounts = Account.objects.filter(user=user, is_active=True).exclude(account_type='credit')
     total_balance = sum(get_account_balance(a) for a in accounts)
     accounts_data = [
         {'id': a.id, 'name': a.name, 'type': a.account_type,
@@ -37,9 +37,14 @@ def dashboard_summary(request):
         t=Sum('amount'))['t'] or 0)
 
     credits = Credit.objects.filter(user=user, is_active=True)
-    total_monthly_credits = float(
-        credits.aggregate(p=Sum('monthly_payment'))['p'] or 0
-    ) + float(credits.aggregate(i=Sum('insurance_monthly'))['i'] or 0)
+    non_revolving = credits.exclude(credit_type='revolving')
+    agg = non_revolving.aggregate(p=Sum('monthly_payment'), i=Sum('insurance_monthly'))
+    total_monthly_credits = float(agg['p'] or 0) + float(agg['i'] or 0)
+    total_monthly_credits += float(
+        CreditDraw.objects.filter(
+            credit__in=credits.filter(credit_type='revolving'), is_active=True,
+        ).aggregate(t=Sum('monthly_payment'))['t'] or 0
+    )
 
     recurring = RecurringTransaction.objects.filter(user=user, is_active=True, transaction_type='expense')
     total_recurring = float(recurring.aggregate(t=Sum('amount'))['t'] or 0)

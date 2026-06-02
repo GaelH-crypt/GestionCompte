@@ -10,7 +10,7 @@ export interface User {
 
 // ─── Accounts ──────────────────────────────────────────────────────────────
 
-export type AccountType = 'checking' | 'savings' | 'cash' | 'other'
+export type AccountType = 'checking' | 'savings' | 'cash' | 'credit' | 'other'
 
 export interface Account {
   id: number
@@ -21,6 +21,8 @@ export interface Account {
   color: string
   icon: string
   is_active: boolean
+  is_import_ignored: boolean
+  linked_credit: number | null
   created_at: string
 }
 
@@ -105,28 +107,43 @@ export interface RecurringSuggestion {
 
 // ─── Credits ───────────────────────────────────────────────────────────────
 
-export type CreditType = 'mortgage' | 'auto' | 'consumer' | 'other'
+export type CreditType = 'mortgage' | 'auto' | 'consumer' | 'revolving' | 'other'
+
+export interface CreditDraw {
+  id: number
+  amount: string
+  monthly_payment: string
+  duration_months: number
+  start_date: string
+  is_active: boolean
+  notes: string
+  created_at: string
+}
 
 export interface Credit {
   id: number
   name: string
   credit_type: CreditType
-  initial_capital: string
-  remaining_capital: string
-  interest_rate: string
-  monthly_payment: string
+  initial_capital: string | null
+  remaining_capital: string | null
+  interest_rate: string | null
+  monthly_payment: string | null
   insurance_monthly: string
-  duration_months: number
+  duration_months: number | null
   start_date: string
   end_date: string | null
+  max_amount: string | null
   early_repayment_possible: boolean
   notes: string
   is_active: boolean
-  total_cost: number
-  total_interest: number
-  remaining_months: number
-  estimated_end_date: string
+  total_cost: number | null
+  total_interest: number | null
+  remaining_months: number | null
+  estimated_end_date: string | null
   total_monthly_charge: number
+  draws: CreditDraw[]
+  available_capacity: number | null
+  linked_accounts: { id: number; name: string }[]
   created_at: string
 }
 
