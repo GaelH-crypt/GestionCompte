@@ -244,10 +244,10 @@ export default function CreditsPage() {
                     max={parseFloat(credit.max_amount)}
                   />
 
-                  {credit.draws.filter(d => d.is_active).length > 0 && (
+                  {(credit.draws ?? []).filter(d => d.is_active).length > 0 && (
                     <div className="space-y-2">
                       <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">Tirages actifs</p>
-                      {credit.draws.filter(d => d.is_active).map((draw) => (
+                      {(credit.draws ?? []).filter(d => d.is_active).map((draw) => (
                         <div key={draw.id} className="flex items-center justify-between bg-gray-800/50 rounded-lg px-3 py-2">
                           <div>
                             <p className="text-sm text-white font-medium">{formatEur(draw.amount)}</p>
@@ -315,10 +315,10 @@ export default function CreditsPage() {
               )}
 
               {/* Linked bank accounts */}
-              {credit.linked_accounts.length > 0 && (
+              {(credit.linked_accounts ?? []).length > 0 && (
                 <div className="mt-3 pt-3 border-t border-gray-700">
                   <p className="text-xs text-gray-500">
-                    Compte bancaire : {credit.linked_accounts.map(a => a.name).join(', ')}
+                    Compte bancaire : {(credit.linked_accounts ?? []).map(a => a.name).join(', ')}
                   </p>
                 </div>
               )}
