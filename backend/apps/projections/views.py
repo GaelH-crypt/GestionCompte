@@ -35,8 +35,8 @@ def projection_view(request):
         result = engine.project_daily(days)
         if checking_engine:
             checking_result = checking_engine.project_daily(days)
-            for i, row in enumerate(result):
-                row['checking_balance'] = checking_result[i]['balance']
+            for row, crow in zip(result, checking_result):
+                row['checking_balance'] = crow['balance']
         else:
             for row in result:
                 row['checking_balance'] = None
@@ -45,8 +45,8 @@ def projection_view(request):
     result = engine.project(months)
     if checking_engine:
         checking_result = checking_engine.project(months)
-        for i, row in enumerate(result):
-            row['checking_balance'] = checking_result[i]['balance']
+        for row, crow in zip(result, checking_result):
+            row['checking_balance'] = crow['balance']
     else:
         for row in result:
             row['checking_balance'] = None

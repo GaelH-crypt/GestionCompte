@@ -271,9 +271,6 @@ def build_engine_from_user(user, overrides: dict = None) -> ProjectionEngine:
 
 def build_engine_for_account(user, account_id: int, overrides: dict = None) -> 'ProjectionEngine':
     """Build ProjectionEngine scoped to a single account (for checking account projection)."""
-    from decimal import Decimal
-    from datetime import date, timedelta
-    from dateutil.relativedelta import relativedelta
     from django.db.models import Sum
     from apps.accounts.models import Account
     from apps.accounts.services import get_account_balance
@@ -327,7 +324,6 @@ def build_engine_for_account(user, account_id: int, overrides: dict = None) -> '
         RecurringTransaction.objects.filter(
             user=user, is_active=True, credit__isnull=False,
             transaction_type='expense', frequency__in=('monthly', 'weekly'),
-            account_id=account_id,
         ).values_list('credit_id', flat=True).distinct()
     )
     uncovered = Credit.objects.filter(user=user, is_active=True).exclude(id__in=covered_credit_ids)
