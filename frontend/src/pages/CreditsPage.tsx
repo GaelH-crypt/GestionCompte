@@ -240,7 +240,7 @@ export default function CreditsPage() {
               {credit.credit_type === 'revolving' && credit.max_amount != null && (
                 <div className="mt-4 space-y-3 border-t border-gray-700 pt-3">
                   <CapacityBar
-                    used={parseFloat(credit.max_amount) - (credit.available_capacity ?? 0)}
+                    used={parseFloat(credit.max_amount) - (credit.available_capacity ?? parseFloat(credit.max_amount))}
                     max={parseFloat(credit.max_amount)}
                   />
 
@@ -305,7 +305,7 @@ export default function CreditsPage() {
                     </div>
                   ) : (
                     <button
-                      onClick={() => setShowDrawForm(credit.id)}
+                      onClick={() => { setShowDrawForm(credit.id); setDrawForm({ amount: '', monthly_payment: '', duration_months: '', start_date: '' }) }}
                       className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors"
                     >
                       <Plus className="h-3 w-3" /> Ajouter un tirage
