@@ -269,6 +269,144 @@ def build_engine_from_user(user, overrides: dict = None) -> ProjectionEngine:
     )
 
 
+def build_engine_for_account(user, account_id: int, overrides: dict = None) -> 'ProjectionEngine':
+    """Build ProjectionEngine scoped to a single account (for checking account projection)."""
+    from decimal import Decimal
+    from datetime import date, timedelta
+    from dateutil.relativedelta import relativedelta
+    from django.db.models import Sum
+    from apps.accounts.models import Account
+    from apps.accounts.services import get_account_balance
+    from apps.credits.models import Credit, CreditDraw
+    from apps.recurring.models import RecurringTransaction
+
+    try:
+        account = Account.objects.get(pk=account_id, user=user, is_active=True)
+    except Account.DoesNotExist:
+        return ProjectionEngine(current_balance=Decimal('0'), monthly_income=Decimal('0'),
+                                monthly_expenses=Decimal('0'), monthly_credits=Decimal('0'))
+
+    current_balance = get_account_balance(account)
+
+    freq_multipliers = {
+        'monthly': Decimal('1'),
+        'weekly': Decimal('52') / Decimal('12'),
+    }
+
+    def monthly_sum_for_account(transaction_type: str) -> Decimal:
+        total = Decimal('0')
+        for freq, multiplier in freq_multipliers.items():
+            agg = RecurringTransaction.objects.filter(
+                user=user, is_active=True, transaction_type=transaction_type,
+                frequency=freq, account_id=account_id,
+            ).aggregate(t=Sum('amount'))['t']
+            if agg:
+                total += agg * multiplier
+        return total
+
+    monthly_income = monthly_sum_for_account('income')
+    monthly_expenses = monthly_sum_for_account('expense')
+
+    # Yearly recurring for this account only
+    today = date.today()
+    end_date = today + relativedelta(months=_MAX_HORIZON_MONTHS)
+    yearly_events = []
+    for rt in RecurringTransaction.objects.filter(
+        user=user, is_active=True, frequency='yearly', account_id=account_id
+    ):
+        occ = rt.next_occurrence
+        while occ <= end_date:
+            yearly_events.append({
+                'year': occ.year, 'month': occ.month,
+                'amount': rt.amount, 'type': rt.transaction_type,
+            })
+            occ = occ + relativedelta(years=1)
+
+    # Credits: include uncovered credits (assumed paid from checking account)
+    covered_credit_ids = list(
+        RecurringTransaction.objects.filter(
+            user=user, is_active=True, credit__isnull=False,
+            transaction_type='expense', frequency__in=('monthly', 'weekly'),
+            account_id=account_id,
+        ).values_list('credit_id', flat=True).distinct()
+    )
+    uncovered = Credit.objects.filter(user=user, is_active=True).exclude(id__in=covered_credit_ids)
+    credit_agg = uncovered.exclude(credit_type='revolving').aggregate(
+        p=Sum('monthly_payment'), ins=Sum('insurance_monthly')
+    )
+    monthly_credits = (credit_agg['p'] or Decimal('0')) + (credit_agg['ins'] or Decimal('0'))
+    revolving_draws = CreditDraw.objects.filter(
+        credit__in=uncovered.filter(credit_type='revolving'), is_active=True,
+    ).aggregate(t=Sum('monthly_payment'))['t']
+    monthly_credits += (revolving_draws or Decimal('0'))
+
+    # Daily events: recurring filtered by account_id + credit charges (uncovered)
+    daily_end = today + timedelta(days=62)
+    daily_events = []
+
+    from apps.transactions.models import Transaction as _Tx
+    first_of_month = today.replace(day=1)
+    _month_rows = list(
+        _Tx.objects.filter(user=user, date__gte=first_of_month, date__lte=today, account_id=account_id)
+        .values('amount', 'transaction_type', 'account_id', 'recurring_transaction_id')
+    )
+    _linked_this_month = {r['recurring_transaction_id'] for r in _month_rows if r['recurring_transaction_id']}
+    _paid_this_month = {(r['amount'], r['transaction_type'], r['account_id']) for r in _month_rows}
+
+    _freq_step = {
+        'weekly': relativedelta(weeks=1),
+        'monthly': relativedelta(months=1),
+        'yearly': relativedelta(years=1),
+    }
+    for rt in RecurringTransaction.objects.filter(user=user, is_active=True, account_id=account_id):
+        step = _freq_step.get(rt.frequency)
+        if step is None:
+            continue
+        kind = 'income' if rt.transaction_type == 'income' else 'expenses'
+        occ = rt.next_occurrence
+        while occ <= today:
+            occ = occ + step
+        if occ.year == today.year and occ.month == today.month:
+            if rt.id in _linked_this_month or (
+                rt.frequency in ('monthly', 'yearly')
+                and (rt.amount, rt.transaction_type, rt.account_id) in _paid_this_month
+            ):
+                occ = occ + step
+        while occ <= daily_end:
+            daily_events.append({'date': occ, 'amount': rt.amount, 'kind': kind, 'label': rt.name})
+            occ = occ + step
+
+    for credit in uncovered.exclude(credit_type='revolving'):
+        amount = (credit.monthly_payment or Decimal('0')) + (credit.insurance_monthly or Decimal('0'))
+        if amount == 0:
+            continue
+        for pay_date in _monthly_charge_dates(credit.start_date.day, today, daily_end):
+            daily_events.append({'date': pay_date, 'amount': amount, 'kind': 'credits', 'label': credit.name})
+
+    for credit in uncovered.filter(credit_type='revolving').prefetch_related('draws'):
+        amount = sum(d.monthly_payment for d in credit.draws.all() if d.is_active)
+        if not amount:
+            continue
+        for pay_date in _monthly_charge_dates(credit.start_date.day, today, daily_end):
+            daily_events.append({'date': pay_date, 'amount': Decimal(str(amount)), 'kind': 'credits', 'label': credit.name})
+
+    decimal_overrides = {}
+    if overrides:
+        for k, v in overrides.items():
+            if k in ('income', 'expenses', 'credits', 'extra_expenses') and v is not None:
+                decimal_overrides[k] = Decimal(str(v))
+
+    return ProjectionEngine(
+        current_balance=current_balance,
+        monthly_income=monthly_income,
+        monthly_expenses=monthly_expenses,
+        monthly_credits=monthly_credits,
+        yearly_events=yearly_events,
+        overrides=decimal_overrides,
+        daily_events=daily_events,
+    )
+
+
 def _monthly_charge_dates(day_of_month: int, start: date, end: date) -> list:
     """Dates falling on `day_of_month` (clamped to month length) within (start, end]."""
     import calendar
