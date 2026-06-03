@@ -4,10 +4,22 @@ Application web de gestion financière personnelle, entièrement auto-hébergée
 
 ## Mise à jour
 
-Après toute modification du code frontend ou backend :
+Après modification du **backend** (code Python rechargé via volume) :
 
 ```bash
-cd /gestioncompte/frontend && npm run build && docker compose restart backend nginx
+docker compose restart backend
+```
+
+Après modification du **frontend** (rebuild de l'image + remplissage du volume Docker) :
+
+```bash
+docker compose up -d --build frontend
+```
+
+**Les deux à la fois :**
+
+```bash
+docker compose up -d --build frontend && docker compose restart backend
 ```
 
 ## Fonctionnalités
