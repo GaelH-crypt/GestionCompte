@@ -14,6 +14,7 @@ import {
   CalendarDays,
   Building2,
   Settings,
+  BarChart2,
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
@@ -29,6 +30,7 @@ const NAV_ITEMS = [
   { to: '/schedule', icon: CalendarDays, label: 'Échéancier' },
   { to: '/projections', icon: TrendingUp, label: 'Projections' },
   { to: '/simulations', icon: Beaker, label: 'Simulations' },
+  { to: '/analyse', icon: BarChart2, label: 'Analyse' },
   { to: '/bank-sync', icon: Building2, label: 'Sync bancaire' },
   { to: '/settings', icon: Settings, label: 'Paramètres' },
 ]

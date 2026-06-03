@@ -14,6 +14,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/recurring': 'Flux récurrents',
   '/projections': 'Projections financières',
   '/simulations': 'Simulations',
+  '/analyse': 'Analyse',
   '/bank-sync': 'Synchronisation bancaire',
   '/bank-sync/callback': 'Connexion bancaire',
   '/settings': 'Paramètres',
