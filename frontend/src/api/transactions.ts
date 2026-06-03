@@ -1,5 +1,5 @@
 import client from './client'
-import type { Transaction, PaginatedResponse, RecurringSuggestion } from '@/types'
+import type { Transaction, PaginatedResponse, RecurringSuggestion, AnalyseResult, AnalyseParams } from '@/types'
 
 export const transactionsApi = {
   list: (params?: Record<string, string | number>) =>
@@ -16,4 +16,6 @@ export const transactionsApi = {
     client.get<RecurringSuggestion[]>('/transactions/detect-recurring/'),
   linkRecurring: (txId: number, recurringId: number | null) =>
     client.post<Transaction>(`/transactions/${txId}/link-recurring/`, { recurring_id: recurringId }),
+  analyse: (params: AnalyseParams) =>
+    client.get<AnalyseResult>('/transactions/analyse/', { params }),
 }

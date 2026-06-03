@@ -358,3 +358,26 @@ export interface CreateRequisitionResponse {
   id: number
   redirect_url: string
 }
+
+// ─── Analyse ───────────────────────────────────────────────────────────────
+
+export interface AnalyseSummaryRow {
+  category_name: string
+  category_color: string
+  count: number
+  total: string
+  percentage: number
+}
+
+export interface AnalyseResult {
+  summary: AnalyseSummaryRow[]
+  transactions: Transaction[]
+}
+
+export interface AnalyseParams {
+  date_from?: string
+  date_to?: string
+  account?: string
+  category?: string
+  transaction_type?: string
+}
