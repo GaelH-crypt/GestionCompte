@@ -162,7 +162,7 @@ def _build_daily_recurring_events(recurring_qs, linked_this_cycle, paid_this_cyc
             continue
         kind = 'income' if rt.transaction_type == 'income' else 'expenses'
         occ = rt.next_occurrence
-        while occ <= today:
+        while occ < today:
             occ = occ + step
         if occ < cycle_end:
             if rt.id in linked_this_cycle or (
@@ -251,7 +251,7 @@ def build_engine_from_user(user, overrides: dict = None, cycle_start_day: int = 
         .values('amount', 'transaction_type', 'account_id', 'recurring_transaction_id')
     )
     _linked_this_cycle = {r['recurring_transaction_id'] for r in _month_rows if r['recurring_transaction_id']}
-    _paid_this_cycle = {(r['amount'], r['transaction_type'], r['account_id']) for r in _month_rows}
+    _paid_this_cycle = {(r['amount'], r['transaction_type'], r['account_id']) for r in _month_rows if not r['recurring_transaction_id']}
 
     daily_events = _build_daily_recurring_events(
         RecurringTransaction.objects.filter(user=user, is_active=True),
@@ -346,7 +346,7 @@ def build_engine_for_account(user, account_id: int, overrides: dict = None, cycl
         .values('amount', 'transaction_type', 'account_id', 'recurring_transaction_id')
     )
     _linked_this_cycle = {r['recurring_transaction_id'] for r in _month_rows if r['recurring_transaction_id']}
-    _paid_this_cycle = {(r['amount'], r['transaction_type'], r['account_id']) for r in _month_rows}
+    _paid_this_cycle = {(r['amount'], r['transaction_type'], r['account_id']) for r in _month_rows if not r['recurring_transaction_id']}
 
     daily_events = _build_daily_recurring_events(
         RecurringTransaction.objects.filter(user=user, is_active=True, account_id=account_id),

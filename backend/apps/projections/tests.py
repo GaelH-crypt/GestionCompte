@@ -329,3 +329,23 @@ class BuildEngineWithCycleStartDayTest(TestCase):
         self.assertIsNotNone(engine)
         result = engine.project(months=1)
         self.assertEqual(len(result), 1)
+
+
+class SimulationViewValidationTest(TestCase):
+    def setUp(self):
+        from rest_framework.test import APIClient
+        self.client = APIClient()
+        self.user = User.objects.create_user('simvaluser', password='p')
+        self.client.force_authenticate(user=self.user)
+        from apps.accounts.models import Account
+        Account.objects.create(
+            user=self.user, name='CC', account_type='checking', initial_balance=1000,
+        )
+
+    def test_simulation_rejects_invalid_months(self):
+        resp = self.client.post('/api/projections/simulate/', {'months': 999}, format='json')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_simulation_accepts_valid_months(self):
+        resp = self.client.post('/api/projections/simulate/', {'months': 3}, format='json')
+        self.assertEqual(resp.status_code, 200)

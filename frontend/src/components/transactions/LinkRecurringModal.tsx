@@ -89,7 +89,7 @@ export function LinkRecurringModal({ transaction, onClose }: Props) {
                 <p className="text-sm text-gray-100 truncate">{rt.name}</p>
                 <p className="text-xs text-gray-500">{rt.frequency === 'monthly' ? 'Mensuel' : rt.frequency === 'weekly' ? 'Hebdo' : 'Annuel'}</p>
               </div>
-              <span className="text-sm font-semibold text-red-400 whitespace-nowrap">
+              <span className={`text-sm font-semibold whitespace-nowrap ${rt.transaction_type === 'income' ? 'text-green-400' : 'text-red-400'}`}>
                 {new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(parseFloat(rt.amount))}
               </span>
             </button>
