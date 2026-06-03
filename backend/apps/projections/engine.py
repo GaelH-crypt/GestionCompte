@@ -220,11 +220,12 @@ def build_engine_from_user(user, overrides: dict = None, cycle_start_day: int = 
         # Catch up past occurrences to the projection window without emitting them.
         while occ <= today:
             occ = occ + step
-        # If the next occurrence falls in the current calendar month, check whether
+        # If the next occurrence falls within the current billing cycle, check whether
         # it has already been paid:
         # 1. Explicit link (priority — handles variable amounts like childcare).
         # 2. Heuristic amount+type+account fallback for unlinked transactions.
-        if occ.year == today.year and occ.month == today.month:
+        cycle_end = first_of_month + relativedelta(months=1)
+        if occ < cycle_end:
             if rt.id in _linked_this_month or (
                 # Heuristic only applies to monthly/yearly: weekly charges can have
                 # multiple occurrences per month, so a past weekly payment would
@@ -364,7 +365,8 @@ def build_engine_for_account(user, account_id: int, overrides: dict = None, cycl
         occ = rt.next_occurrence
         while occ <= today:
             occ = occ + step
-        if occ.year == today.year and occ.month == today.month:
+        cycle_end = first_of_month + relativedelta(months=1)
+        if occ < cycle_end:
             if rt.id in _linked_this_month or (
                 rt.frequency in ('monthly', 'yearly')
                 and (rt.amount, rt.transaction_type, rt.account_id) in _paid_this_month
