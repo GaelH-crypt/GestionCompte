@@ -321,3 +321,18 @@ class AnalyseViewTest(TestCase):
         self.assertEqual(resp.status_code, 200)
         names = [row['category_name'] for row in resp.data['summary']]
         self.assertIn('Sans catégorie', names)
+
+    def test_analyse_expense_total_is_negative(self):
+        self._tx('Loyer', '900.00', 'expense', '2026-06-01', self.cat)
+        resp = self.client.get('/api/transactions/analyse/')
+        self.assertEqual(resp.status_code, 200)
+        row = resp.data['summary'][0]
+        self.assertEqual(row['category_name'], 'Alimentation')
+        self.assertTrue(float(row['total']) < 0, f"Expense total should be negative, got {row['total']}")
+
+    def test_analyse_income_total_is_positive(self):
+        self._tx('Salaire', '2000.00', 'income', '2026-06-01', self.cat)
+        resp = self.client.get('/api/transactions/analyse/')
+        self.assertEqual(resp.status_code, 200)
+        row = resp.data['summary'][0]
+        self.assertTrue(float(row['total']) > 0, f"Income total should be positive, got {row['total']}")

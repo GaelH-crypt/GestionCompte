@@ -1,5 +1,5 @@
 from dateutil.relativedelta import relativedelta
-from django.db.models import Sum, Count
+from django.db.models import Sum, Count, Case, When, F, DecimalField
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -74,9 +74,14 @@ class TransactionViewSet(viewsets.ModelViewSet):
     def analyse(self, request):
         qs = self.filter_queryset(self.get_queryset())
 
+        signed_amount = Case(
+            When(transaction_type__in=['expense', 'transfer'], then=-F('amount')),
+            default=F('amount'),
+            output_field=DecimalField(),
+        )
         summary_qs = (
             qs.values('category__name', 'category__color')
-            .annotate(count=Count('id'), total=Sum('amount'))
+            .annotate(count=Count('id'), total=Sum(signed_amount))
             .order_by('category__name')
         )
         summary_rows = list(summary_qs)
