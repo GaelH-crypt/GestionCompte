@@ -54,9 +54,9 @@ export default function BankSyncPage() {
 
   const { data: accountsData } = useQuery({
     queryKey: ['accounts'],
-    queryFn: () => accountsApi.list().then((r) => r.data),
+    queryFn: () => accountsApi.list().then((r) => r.data.results),
   })
-  const appAccounts = accountsData?.results ?? []
+  const appAccounts = accountsData ?? []
 
   const bankAccounts: BankAccountLinked[] = requisitions.flatMap((r) => r.bank_accounts)
 
