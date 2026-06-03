@@ -50,7 +50,9 @@ export default function AccountsPage() {
   if (isLoading) return <PageSpinner />
 
   const accounts = data ?? []
-  const totalBalance = accounts.reduce((s, a) => s + a.current_balance, 0)
+  const mainAccounts = accounts.filter((a) => a.account_type !== 'credit')
+  const creditAccounts = accounts.filter((a) => a.account_type === 'credit')
+  const totalBalance = mainAccounts.reduce((s, a) => s + a.current_balance, 0)
 
   return (
     <div className="space-y-6">
@@ -64,81 +66,144 @@ export default function AccountsPage() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {accounts.map((account) => (
-          <Card key={account.id}>
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div
-                  className="h-10 w-10 rounded-xl flex items-center justify-center"
-                  style={{ backgroundColor: account.color + '33' }}
-                >
-                  <CreditCard className="h-5 w-5" style={{ color: account.color }} />
-                </div>
-                <div>
-                  <p className="font-semibold text-white">{account.name}</p>
-                  <p className="text-xs text-gray-500">{ACCOUNT_TYPE_LABELS[account.account_type]}</p>
-                  <div className="flex gap-1 mt-1 flex-wrap">
-                    {account.is_import_ignored && (
-                      <span className="text-xs text-orange-400 bg-orange-400/10 px-1.5 py-0.5 rounded">
-                        Ignoré à l'import
-                      </span>
-                    )}
-                    {account.account_type === 'credit' && (
-                      <span className="text-xs text-blue-400 bg-blue-400/10 px-1.5 py-0.5 rounded">
-                        Compte crédit
-                      </span>
-                    )}
+      <div className="space-y-8">
+        {/* Comptes principaux */}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {mainAccounts.map((account) => (
+            <Card key={account.id}>
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div
+                    className="h-10 w-10 rounded-xl flex items-center justify-center"
+                    style={{ backgroundColor: account.color + '33' }}
+                  >
+                    <CreditCard className="h-5 w-5" style={{ color: account.color }} />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-white">{account.name}</p>
+                    <p className="text-xs text-gray-500">{ACCOUNT_TYPE_LABELS[account.account_type]}</p>
+                    <div className="flex gap-1 mt-1 flex-wrap">
+                      {account.is_import_ignored && (
+                        <span className="text-xs text-orange-400 bg-orange-400/10 px-1.5 py-0.5 rounded">
+                          Ignoré à l'import
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => ignoreMut.mutate({ id: account.id, value: !account.is_import_ignored })}
+                    title={account.is_import_ignored ? "Réactiver à l'import" : "Ignorer à l'import"}
+                    className={`p-1.5 rounded-lg transition-colors ${
+                      account.is_import_ignored
+                        ? 'text-orange-400 hover:text-orange-300 hover:bg-gray-800'
+                        : 'text-gray-500 hover:text-white hover:bg-gray-800'
+                    }`}
+                  >
+                    <EyeOff className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => { setEditing(account); setShowForm(true) }}
+                    className="p-1.5 text-gray-500 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (confirm(`Supprimer le compte "${account.name}" ?`)) {
+                        deleteMut.mutate(account.id)
+                      }
+                    }}
+                    className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-900/20 rounded-lg transition-colors"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
-              <div className="flex gap-1">
-                <button
-                  onClick={() => ignoreMut.mutate({ id: account.id, value: !account.is_import_ignored })}
-                  title={account.is_import_ignored ? "Réactiver à l'import" : "Ignorer à l'import"}
-                  className={`p-1.5 rounded-lg transition-colors ${
-                    account.is_import_ignored
-                      ? 'text-orange-400 hover:text-orange-300 hover:bg-gray-800'
-                      : 'text-gray-500 hover:text-white hover:bg-gray-800'
-                  }`}
-                >
-                  <EyeOff className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={() => { setEditing(account); setShowForm(true) }}
-                  className="p-1.5 text-gray-500 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
-                >
-                  <Pencil className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={() => {
-                    if (confirm(`Supprimer le compte "${account.name}" ?`)) {
-                      deleteMut.mutate(account.id)
-                    }
-                  }}
-                  className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-900/20 rounded-lg transition-colors"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
+              <p className={`text-2xl font-bold ${account.current_balance >= 0 ? 'text-white' : 'text-red-400'}`}>
+                {formatEur(account.current_balance)}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">Solde initial : {formatEur(account.initial_balance)}</p>
+            </Card>
+          ))}
+          {mainAccounts.length === 0 && (
+            <div className="col-span-full flex flex-col items-center justify-center h-40 text-gray-500">
+              <CreditCard className="h-10 w-10 mb-2 opacity-30" />
+              <p className="text-sm">Aucun compte. Créez-en un pour commencer.</p>
             </div>
-            <p
-              className={`text-2xl font-bold ${
-                account.current_balance >= 0 ? 'text-white' : 'text-red-400'
-              }`}
-            >
-              {formatEur(account.current_balance)}
-            </p>
-            <p className="text-xs text-gray-500 mt-1">
-              Solde initial : {formatEur(account.initial_balance)}
-            </p>
-          </Card>
-        ))}
+          )}
+        </div>
 
-        {accounts.length === 0 && (
-          <div className="col-span-full flex flex-col items-center justify-center h-40 text-gray-500">
-            <CreditCard className="h-10 w-10 mb-2 opacity-30" />
-            <p className="text-sm">Aucun compte. Créez-en un pour commencer.</p>
+        {/* Comptes liés à un crédit */}
+        {creditAccounts.length > 0 && (
+          <div>
+            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">
+              Comptes liés à un crédit
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {creditAccounts.map((account) => (
+                <Card key={account.id}>
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="h-10 w-10 rounded-xl flex items-center justify-center"
+                        style={{ backgroundColor: account.color + '33' }}
+                      >
+                        <CreditCard className="h-5 w-5" style={{ color: account.color }} />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-white">{account.name}</p>
+                        <p className="text-xs text-gray-500">{ACCOUNT_TYPE_LABELS[account.account_type]}</p>
+                        <div className="flex gap-1 mt-1 flex-wrap">
+                          {account.is_import_ignored && (
+                            <span className="text-xs text-orange-400 bg-orange-400/10 px-1.5 py-0.5 rounded">
+                              Ignoré à l'import
+                            </span>
+                          )}
+                          <span className="text-xs text-blue-400 bg-blue-400/10 px-1.5 py-0.5 rounded">
+                            Compte crédit
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => ignoreMut.mutate({ id: account.id, value: !account.is_import_ignored })}
+                        title={account.is_import_ignored ? "Réactiver à l'import" : "Ignorer à l'import"}
+                        className={`p-1.5 rounded-lg transition-colors ${
+                          account.is_import_ignored
+                            ? 'text-orange-400 hover:text-orange-300 hover:bg-gray-800'
+                            : 'text-gray-500 hover:text-white hover:bg-gray-800'
+                        }`}
+                      >
+                        <EyeOff className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => { setEditing(account); setShowForm(true) }}
+                        className="p-1.5 text-gray-500 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (confirm(`Supprimer le compte "${account.name}" ?`)) {
+                            deleteMut.mutate(account.id)
+                          }
+                        }}
+                        className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-900/20 rounded-lg transition-colors"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                  <p className={`text-2xl font-bold ${account.current_balance >= 0 ? 'text-white' : 'text-red-400'}`}>
+                    {formatEur(account.current_balance)}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">Solde initial : {formatEur(account.initial_balance)}</p>
+                </Card>
+              ))}
+            </div>
           </div>
         )}
       </div>
