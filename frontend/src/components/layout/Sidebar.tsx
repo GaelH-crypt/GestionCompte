@@ -25,7 +25,7 @@ const NAV_ITEMS = [
   { to: '/transactions', icon: ArrowLeftRight, label: 'Transactions' },
   { to: '/categories', icon: Tag, label: 'Catégories' },
   { to: '/credits', icon: PiggyBank, label: 'Crédits' },
-  { to: '/recurring', icon: RefreshCw, label: 'Charges fixes' },
+  { to: '/recurring', icon: RefreshCw, label: 'Flux récurrents' },
   { to: '/schedule', icon: CalendarDays, label: 'Échéancier' },
   { to: '/projections', icon: TrendingUp, label: 'Projections' },
   { to: '/simulations', icon: Beaker, label: 'Simulations' },

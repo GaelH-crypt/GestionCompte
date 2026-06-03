@@ -260,7 +260,7 @@ function RecurringFormModal({ item, credits, onClose, onSaved }: RecurringFormMo
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
       <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-lg p-6 overflow-y-auto max-h-[90vh]">
         <h2 className="text-lg font-semibold text-white mb-5">
-          {item ? 'Modifier la charge récurrente' : 'Nouvelle charge récurrente'}
+          {item ? 'Modifier l\'élément récurrent' : 'Nouvel élément récurrent'}
         </h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="flex flex-col gap-1">

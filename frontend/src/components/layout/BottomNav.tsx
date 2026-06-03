@@ -16,7 +16,7 @@ const MAIN_ITEMS = [
 const MORE_ITEMS = [
   { to: '/categories', icon: Tag, label: 'Catégories' },
   { to: '/credits', icon: PiggyBank, label: 'Crédits' },
-  { to: '/recurring', icon: RefreshCw, label: 'Charges fixes' },
+  { to: '/recurring', icon: RefreshCw, label: 'Flux récurrents' },
   { to: '/schedule', icon: CalendarDays, label: 'Échéancier' },
   { to: '/simulations', icon: Beaker, label: 'Simulations' },
   { to: '/bank-sync', icon: Building2, label: 'Sync bancaire' },
