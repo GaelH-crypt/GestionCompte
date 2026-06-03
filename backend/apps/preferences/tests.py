@@ -65,6 +65,41 @@ class PreferencesAPITest(TestCase):
         resp = unauth.get('/api/preferences/')
         self.assertEqual(resp.status_code, 401)
 
+    def test_get_returns_cycle_start_day_default(self):
+        resp = self.client.get('/api/preferences/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['cycle_start_day'], 1)
+
+    def test_patch_cycle_start_day_valid(self):
+        resp = self.client.patch('/api/preferences/', {'cycle_start_day': 25}, format='json')
+        self.assertEqual(resp.status_code, 200)
+        pref = UserPreference.objects.get(user=self.user)
+        self.assertEqual(pref.cycle_start_day, 25)
+
+    def test_patch_cycle_start_day_too_low(self):
+        resp = self.client.patch('/api/preferences/', {'cycle_start_day': 0}, format='json')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_patch_cycle_start_day_too_high(self):
+        resp = self.client.patch('/api/preferences/', {'cycle_start_day': 29}, format='json')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_patch_cycle_start_day_max_valid(self):
+        resp = self.client.patch('/api/preferences/', {'cycle_start_day': 28}, format='json')
+        self.assertEqual(resp.status_code, 200)
+
+    def test_patch_cycle_start_day_not_integer(self):
+        resp = self.client.patch('/api/preferences/', {'cycle_start_day': 'abc'}, format='json')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_patch_empty_body_still_400(self):
+        resp = self.client.patch('/api/preferences/', {}, format='json')
+        self.assertEqual(resp.status_code, 400)
+
+    def test_patch_primary_account_alone_still_works(self):
+        resp = self.client.patch('/api/preferences/', {'primary_account': self.account.id}, format='json')
+        self.assertEqual(resp.status_code, 200)
+
 
 from datetime import date as _date_class
 from django.test import TestCase as _DjangoTestCase
