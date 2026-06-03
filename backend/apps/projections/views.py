@@ -22,12 +22,18 @@ def projection_view(request):
     if months not in VALID_HORIZONS:
         return Response({'error': 'months must be 1, 3, 6, 12 or 60'}, status=status.HTTP_400_BAD_REQUEST)
 
-    engine = build_engine_from_user(request.user)
-
     pref = UserPreference.objects.filter(
-        user=request.user, primary_account__isnull=False, primary_account__is_active=True
+        user=request.user
     ).select_related('primary_account').first()
-    checking_engine = build_engine_for_account(request.user, pref.primary_account_id) if pref else None
+    cycle_start_day = pref.cycle_start_day if pref else 1
+
+    engine = build_engine_from_user(request.user, cycle_start_day=cycle_start_day)
+
+    checking_engine = None
+    if pref and pref.primary_account and pref.primary_account.is_active:
+        checking_engine = build_engine_for_account(
+            request.user, pref.primary_account_id, cycle_start_day=cycle_start_day
+        )
 
     if months == 1:
         today = date.today()
@@ -84,8 +90,11 @@ def simulation_view(request):
         if total_extra > 0:
             overrides['extra_expenses'] = total_extra
 
-    engine = build_engine_from_user(request.user, overrides=overrides)
-    baseline_engine = build_engine_from_user(request.user)
+    pref = UserPreference.objects.filter(user=request.user).first()
+    cycle_start_day = pref.cycle_start_day if pref else 1
+
+    engine = build_engine_from_user(request.user, overrides=overrides, cycle_start_day=cycle_start_day)
+    baseline_engine = build_engine_from_user(request.user, cycle_start_day=cycle_start_day)
 
     if months == 1:
         today = date.today()

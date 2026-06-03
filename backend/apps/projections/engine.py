@@ -120,7 +120,7 @@ class ProjectionEngine:
         return result
 
 
-def build_engine_from_user(user, overrides: dict = None) -> ProjectionEngine:
+def build_engine_from_user(user, overrides: dict = None, cycle_start_day: int = 1) -> ProjectionEngine:
     """Build ProjectionEngine from user's real data."""
     from django.db.models import Sum
     from apps.accounts.models import Account
@@ -197,7 +197,8 @@ def build_engine_from_user(user, overrides: dict = None) -> ProjectionEngine:
     #    amounts differ (e.g. variable childcare payments).
     # 2. Heuristic (amount + type + account) — fallback for unlinked transactions.
     from apps.transactions.models import Transaction as _Tx
-    first_of_month = today.replace(day=1)
+    from apps.preferences.cycle import get_cycle_start
+    first_of_month = get_cycle_start(today, cycle_start_day)
     _month_rows = list(
         _Tx.objects.filter(user=user, date__gte=first_of_month, date__lte=today)
         .values('amount', 'transaction_type', 'account_id', 'recurring_transaction_id')
@@ -269,7 +270,7 @@ def build_engine_from_user(user, overrides: dict = None) -> ProjectionEngine:
     )
 
 
-def build_engine_for_account(user, account_id: int, overrides: dict = None) -> 'ProjectionEngine':
+def build_engine_for_account(user, account_id: int, overrides: dict = None, cycle_start_day: int = 1) -> 'ProjectionEngine':
     """Build ProjectionEngine scoped to a single account (for checking account projection)."""
     from django.db.models import Sum
     from apps.accounts.models import Account
@@ -341,7 +342,8 @@ def build_engine_for_account(user, account_id: int, overrides: dict = None) -> '
     daily_events = []
 
     from apps.transactions.models import Transaction as _Tx
-    first_of_month = today.replace(day=1)
+    from apps.preferences.cycle import get_cycle_start
+    first_of_month = get_cycle_start(today, cycle_start_day)
     _month_rows = list(
         _Tx.objects.filter(user=user, date__gte=first_of_month, date__lte=today, account_id=account_id)
         .values('amount', 'transaction_type', 'account_id', 'recurring_transaction_id')
