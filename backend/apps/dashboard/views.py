@@ -1,6 +1,5 @@
 from datetime import date, timedelta
-from decimal import Decimal
-from django.db.models import Sum, Q
+from django.db.models import Sum
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -12,6 +11,7 @@ from apps.transactions.models import Transaction
 from apps.credits.models import Credit, CreditDraw
 from apps.recurring.models import RecurringTransaction
 from apps.preferences.models import UserPreference
+from apps.preferences.cycle import get_cycle_start, get_cycle_start_nth_ago
 
 
 @api_view(['GET'])
@@ -19,7 +19,10 @@ from apps.preferences.models import UserPreference
 def dashboard_summary(request):
     user = request.user
     today = date.today()
-    first_of_month = today.replace(day=1)
+
+    pref = UserPreference.objects.filter(user=user).select_related('primary_account').first()
+    cycle_start_day = pref.cycle_start_day if pref else 1
+    first_of_month = get_cycle_start(today, cycle_start_day)
 
     accounts = Account.objects.filter(user=user, is_active=True).exclude(account_type='credit')
     total_balance = sum(get_account_balance(a) for a in accounts)
@@ -83,12 +86,10 @@ def dashboard_summary(request):
             user=user, is_active=True, next_occurrence__lte=cutoff, next_occurrence__gte=today
         ).values('name', 'amount', 'next_occurrence', 'transaction_type')[:10]
     )
-    # Serialize date to string for JSON
     for item in upcoming_recurring:
         item['next_occurrence'] = str(item['next_occurrence'])
         item['amount'] = str(item['amount'])
 
-    pref = UserPreference.objects.filter(user=user).select_related('primary_account').first()
     checking_account_id = None
     checking_account_balance = None
     if pref and pref.primary_account and pref.primary_account.is_active:
@@ -113,23 +114,37 @@ def dashboard_summary(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def balance_history(request):
-    """Monthly balance evolution for the last 12 months."""
+    """Balance evolution for the last 12 billing cycles."""
     from dateutil.relativedelta import relativedelta
     user = request.user
     today = date.today()
-    data = []
 
+    pref = UserPreference.objects.filter(user=user).first()
+    cycle_start_day = pref.cycle_start_day if pref else 1
+
+    data = []
     for i in range(11, -1, -1):
-        month_start = today.replace(day=1) - relativedelta(months=i)
-        month_end = month_start + relativedelta(months=1)
+        cycle_start = get_cycle_start_nth_ago(today, cycle_start_day, i)
+        cycle_end = cycle_start + relativedelta(months=1)
         income = float(Transaction.objects.filter(
-            user=user, date__gte=month_start, date__lt=month_end, transaction_type='income'
+            user=user, date__gte=cycle_start, date__lt=cycle_end, transaction_type='income'
         ).aggregate(t=Sum('amount'))['t'] or 0)
         expenses = float(Transaction.objects.filter(
-            user=user, date__gte=month_start, date__lt=month_end, transaction_type='expense'
+            user=user, date__gte=cycle_start, date__lt=cycle_end, transaction_type='expense'
         ).aggregate(t=Sum('amount'))['t'] or 0)
+
+        if cycle_start_day == 1:
+            label = cycle_start.strftime('%b %Y')
+        else:
+            cycle_end_inclusive = cycle_end - timedelta(days=1)
+            label = (
+                f"{cycle_start.day} {cycle_start.strftime('%b')}"
+                f" → "
+                f"{cycle_end_inclusive.day} {cycle_end_inclusive.strftime('%b %Y')}"
+            )
+
         data.append({
-            'month': month_start.strftime('%b %Y'),
+            'month': label,
             'income': income,
             'expenses': expenses,
             'net': income - expenses,

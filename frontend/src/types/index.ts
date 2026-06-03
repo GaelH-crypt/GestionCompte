@@ -235,6 +235,7 @@ export interface SimulationParams {
 export interface UserPreference {
   primary_account: number | null
   primary_account_name: string | null
+  cycle_start_day: number
 }
 
 // ─── API ───────────────────────────────────────────────────────────────────

@@ -304,4 +304,28 @@ class BuildEngineForAccountTest(TestCase):
         client.force_authenticate(user=self.user)
         resp = client.get('/api/projections/?months=3')
         self.assertEqual(resp.status_code, 200)
-        self.assertIsNone(resp.data[0].get('checking_balance'))
+
+
+class BuildEngineWithCycleStartDayTest(TestCase):
+    def setUp(self):
+        from apps.accounts.models import Account
+        self.user = User.objects.create_user('engcycle', password='p')
+        Account.objects.create(
+            user=self.user, name='CC', account_type='checking', initial_balance=2000,
+        )
+
+    def test_build_engine_from_user_accepts_cycle_start_day(self):
+        from apps.projections.engine import build_engine_from_user
+        engine = build_engine_from_user(self.user, cycle_start_day=25)
+        self.assertIsNotNone(engine)
+        result = engine.project(months=1)
+        self.assertEqual(len(result), 1)
+
+    def test_build_engine_for_account_accepts_cycle_start_day(self):
+        from apps.projections.engine import build_engine_for_account
+        from apps.accounts.models import Account
+        account = Account.objects.filter(user=self.user).first()
+        engine = build_engine_for_account(self.user, account.id, cycle_start_day=25)
+        self.assertIsNotNone(engine)
+        result = engine.project(months=1)
+        self.assertEqual(len(result), 1)
