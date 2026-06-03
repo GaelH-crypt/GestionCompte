@@ -261,3 +261,61 @@ class LinkRecurringViewTest(TestCase):
         rt.refresh_from_db()
         # tx.date (2026-06-15) < rt.next_occurrence (2026-07-01) → no advance
         self.assertEqual(rt.next_occurrence, date(2026, 7, 1))
+
+
+class AnalyseViewTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user('analyseuser', password='pass')
+        self.client.force_authenticate(user=self.user)
+        self.account = Account.objects.create(
+            user=self.user, name='Main', account_type='checking',
+            initial_balance=0, color='#fff', icon='CreditCard'
+        )
+        from apps.categories.models import Category
+        self.cat = Category.objects.create(
+            user=self.user, name='Alimentation', color='#f00', icon='ShoppingCart'
+        )
+
+    def _tx(self, description, amount, tx_type, date_str, category=None):
+        from apps.transactions.models import Transaction
+        return Transaction.objects.create(
+            user=self.user, account=self.account,
+            transaction_type=tx_type, amount=amount,
+            description=description, date=date_str,
+            category=category,
+        )
+
+    def test_analyse_returns_summary_and_transactions(self):
+        self._tx('Lidl', '32.50', 'expense', '2026-06-01', self.cat)
+        self._tx('Lidl 2', '15.00', 'expense', '2026-06-03', self.cat)
+        resp = self.client.get('/api/transactions/analyse/', {
+            'date_from': '2026-06-01', 'date_to': '2026-06-03'
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('summary', resp.data)
+        self.assertIn('transactions', resp.data)
+        self.assertEqual(len(resp.data['summary']), 1)
+        self.assertEqual(resp.data['summary'][0]['category_name'], 'Alimentation')
+        self.assertEqual(resp.data['summary'][0]['count'], 2)
+        self.assertEqual(len(resp.data['transactions']), 2)
+
+    def test_analyse_filters_by_type(self):
+        self._tx('Salaire', '2000.00', 'income', '2026-06-01')
+        self._tx('Loyer', '800.00', 'expense', '2026-06-01')
+        resp = self.client.get('/api/transactions/analyse/', {'transaction_type': 'income'})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.data['transactions']), 1)
+        self.assertEqual(resp.data['transactions'][0]['description'], 'Salaire')
+
+    def test_analyse_no_auth(self):
+        unauthenticated = APIClient()
+        resp = unauthenticated.get('/api/transactions/analyse/')
+        self.assertEqual(resp.status_code, 401)
+
+    def test_analyse_groups_uncategorised(self):
+        self._tx('Divers', '10.00', 'expense', '2026-06-01', None)
+        resp = self.client.get('/api/transactions/analyse/')
+        self.assertEqual(resp.status_code, 200)
+        names = [row['category_name'] for row in resp.data['summary']]
+        self.assertIn('Sans catégorie', names)

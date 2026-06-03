@@ -1,4 +1,5 @@
 from dateutil.relativedelta import relativedelta
+from django.db.models import Sum, Count
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -68,3 +69,32 @@ class TransactionViewSet(viewsets.ModelViewSet):
                 rt.save(update_fields=['next_occurrence'])
 
         return Response(TransactionSerializer(tx, context={'request': request}).data)
+
+    @action(detail=False, methods=['get'], url_path='analyse')
+    def analyse(self, request):
+        qs = self.filter_queryset(self.get_queryset())
+
+        summary_qs = (
+            qs.values('category__name', 'category__color')
+            .annotate(count=Count('id'), total=Sum('amount'))
+            .order_by('category__name')
+        )
+        total_abs = sum(abs(float(row['total'] or 0)) for row in summary_qs)
+
+        summary = []
+        for row in summary_qs:
+            row_total = float(row['total'] or 0)
+            pct = round(abs(row_total) / total_abs * 100, 1) if total_abs else 0
+            summary.append({
+                'category_name': row['category__name'] or 'Sans catégorie',
+                'category_color': row['category__color'] or '#6b7280',
+                'count': row['count'],
+                'total': str(row['total']),
+                'percentage': pct,
+            })
+
+        transactions = TransactionSerializer(
+            qs.order_by('-date'), many=True, context={'request': request}
+        ).data
+
+        return Response({'summary': summary, 'transactions': transactions})
