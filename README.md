@@ -2,6 +2,26 @@
 
 Application web de gestion financière personnelle, entièrement auto-hébergée. Gérez vos comptes bancaires, suivez vos dépenses et revenus, planifiez vos projections financières et simulez des scénarios sans impacter vos données réelles.
 
+## Mise à jour
+
+Après modification du **backend** (code Python rechargé via volume) :
+
+```bash
+docker compose restart backend
+```
+
+Après modification du **frontend** (rebuild de l'image + remplissage du volume Docker) :
+
+```bash
+docker compose up -d --build frontend
+```
+
+**Les deux à la fois :**
+
+```bash
+docker compose up -d --build frontend && docker compose restart backend
+```
+
 ## Fonctionnalités
 
 - **Comptes** — Comptes courants, épargne, espèces, autres
