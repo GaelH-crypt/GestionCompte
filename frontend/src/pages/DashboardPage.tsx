@@ -70,7 +70,7 @@ export default function DashboardPage() {
           iconColor="text-orange-400"
         />
         <StatCard
-          title="Charges fixes"
+          title="Charges mensuelles fixes"
           value={formatEur(summary.total_recurring_expenses)}
           icon={RefreshCw}
           iconBg="bg-purple-500/20"
