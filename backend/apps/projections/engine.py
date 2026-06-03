@@ -120,12 +120,80 @@ class ProjectionEngine:
         return result
 
 
+_FREQ_STEP = {
+    'weekly': relativedelta(weeks=1),
+    'monthly': relativedelta(months=1),
+    'yearly': relativedelta(years=1),
+}
+
+
+def _compute_uncovered_credits(user):
+    """Return (uncovered queryset, monthly_credits Decimal) for a user."""
+    from django.db.models import Sum
+    from apps.credits.models import Credit, CreditDraw
+    from apps.recurring.models import RecurringTransaction
+
+    covered_ids = list(
+        RecurringTransaction.objects.filter(
+            user=user, is_active=True, credit__isnull=False,
+            transaction_type='expense', frequency__in=('monthly', 'weekly'),
+        ).values_list('credit_id', flat=True).distinct()
+    )
+    uncovered = Credit.objects.filter(user=user, is_active=True).exclude(id__in=covered_ids)
+    credit_agg = uncovered.exclude(credit_type='revolving').aggregate(
+        p=Sum('monthly_payment'), ins=Sum('insurance_monthly')
+    )
+    monthly_credits = (credit_agg['p'] or Decimal('0')) + (credit_agg['ins'] or Decimal('0'))
+    revolving_draws = CreditDraw.objects.filter(
+        credit__in=uncovered.filter(credit_type='revolving'), is_active=True,
+    ).aggregate(t=Sum('monthly_payment'))['t']
+    monthly_credits += (revolving_draws or Decimal('0'))
+    return uncovered, monthly_credits
+
+
+def _build_daily_recurring_events(recurring_qs, linked_this_cycle, paid_this_cycle,
+                                   first_of_month, today, daily_end):
+    """Emit daily cashflow entries for recurring transactions, skipping already-paid occurrences."""
+    events = []
+    cycle_end = first_of_month + relativedelta(months=1)
+    for rt in recurring_qs:
+        step = _FREQ_STEP.get(rt.frequency)
+        if step is None:
+            continue
+        kind = 'income' if rt.transaction_type == 'income' else 'expenses'
+        occ = rt.next_occurrence
+        while occ <= today:
+            occ = occ + step
+        if occ < cycle_end:
+            if rt.id in linked_this_cycle or (
+                # Heuristic only applies to monthly/yearly: weekly charges can have
+                # multiple occurrences per month, so a past weekly payment would
+                # incorrectly suppress the next unpaid occurrence.
+                rt.frequency in ('monthly', 'yearly')
+                and (rt.amount, rt.transaction_type, rt.account_id) in paid_this_cycle
+            ):
+                occ = occ + step
+        while occ <= daily_end:
+            events.append({'date': occ, 'amount': rt.amount, 'kind': kind, 'label': rt.name})
+            occ = occ + step
+    return events
+
+
+def _parse_overrides(overrides: dict | None) -> dict:
+    if not overrides:
+        return {}
+    return {
+        k: Decimal(str(v))
+        for k, v in overrides.items()
+        if k in ('income', 'expenses', 'credits', 'extra_expenses') and v is not None
+    }
+
+
 def build_engine_from_user(user, overrides: dict = None, cycle_start_day: int = 1) -> ProjectionEngine:
     """Build ProjectionEngine from user's real data."""
     from django.db.models import Sum
     from apps.accounts.models import Account
     from apps.accounts.services import get_account_balance
-    from apps.credits.models import Credit, CreditDraw
     from apps.recurring.models import RecurringTransaction
 
     accounts = Account.objects.filter(user=user, is_active=True).exclude(account_type='credit')
@@ -168,34 +236,13 @@ def build_engine_from_user(user, overrides: dict = None, cycle_start_day: int = 
 
     # Only count credits that have NO linked active recurring transaction that
     # already contributes to monthly_expenses (expense, monthly or weekly).
-    # Yearly or income recurrences do not replace the monthly credit charge.
-    covered_credit_ids = list(
-        RecurringTransaction.objects.filter(
-            user=user, is_active=True, credit__isnull=False,
-            transaction_type='expense', frequency__in=('monthly', 'weekly'),
-        ).values_list('credit_id', flat=True).distinct()
-    )
-    uncovered = Credit.objects.filter(user=user, is_active=True).exclude(id__in=covered_credit_ids)
-    credit_agg = uncovered.exclude(credit_type='revolving').aggregate(
-        p=Sum('monthly_payment'), ins=Sum('insurance_monthly')
-    )
-    monthly_credits = (credit_agg['p'] or Decimal('0')) + (credit_agg['ins'] or Decimal('0'))
-    revolving_draws = CreditDraw.objects.filter(
-        credit__in=uncovered.filter(credit_type='revolving'), is_active=True,
-    ).aggregate(t=Sum('monthly_payment'))['t']
-    monthly_credits += (revolving_draws or Decimal('0'))
+    uncovered, monthly_credits = _compute_uncovered_credits(user)
 
     # Day-by-day cashflow events for the fine-grained (1-month) projection: place
     # every recurrence and credit charge on its real date. ~2 months covers the
     # longest "1 mois" window with margin.
     daily_end = today + timedelta(days=62)
-    daily_events = []
 
-    # Pre-fetch transactions from the current month to detect recurring charges that
-    # were already paid via import. Two detection layers:
-    # 1. Explicit link (recurring_transaction FK) — takes priority, works even when
-    #    amounts differ (e.g. variable childcare payments).
-    # 2. Heuristic (amount + type + account) — fallback for unlinked transactions.
     from apps.transactions.models import Transaction as _Tx
     from apps.preferences.cycle import get_cycle_start
     first_of_month = get_cycle_start(today, cycle_start_day)
@@ -203,43 +250,14 @@ def build_engine_from_user(user, overrides: dict = None, cycle_start_day: int = 
         _Tx.objects.filter(user=user, date__gte=first_of_month, date__lte=today)
         .values('amount', 'transaction_type', 'account_id', 'recurring_transaction_id')
     )
-    _linked_this_month = {r['recurring_transaction_id'] for r in _month_rows if r['recurring_transaction_id']}
-    _paid_this_month = {(r['amount'], r['transaction_type'], r['account_id']) for r in _month_rows}
+    _linked_this_cycle = {r['recurring_transaction_id'] for r in _month_rows if r['recurring_transaction_id']}
+    _paid_this_cycle = {(r['amount'], r['transaction_type'], r['account_id']) for r in _month_rows}
 
-    _freq_step = {
-        'weekly': relativedelta(weeks=1),
-        'monthly': relativedelta(months=1),
-        'yearly': relativedelta(years=1),
-    }
-    for rt in RecurringTransaction.objects.filter(user=user, is_active=True):
-        step = _freq_step.get(rt.frequency)
-        if step is None:
-            continue
-        kind = 'income' if rt.transaction_type == 'income' else 'expenses'
-        occ = rt.next_occurrence
-        # Catch up past occurrences to the projection window without emitting them.
-        while occ <= today:
-            occ = occ + step
-        # If the next occurrence falls within the current billing cycle, check whether
-        # it has already been paid:
-        # 1. Explicit link (priority — handles variable amounts like childcare).
-        # 2. Heuristic amount+type+account fallback for unlinked transactions.
-        cycle_end = first_of_month + relativedelta(months=1)
-        if occ < cycle_end:
-            if rt.id in _linked_this_month or (
-                # Heuristic only applies to monthly/yearly: weekly charges can have
-                # multiple occurrences per month, so a past weekly payment would
-                # incorrectly suppress the next unpaid occurrence.
-                rt.frequency in ('monthly', 'yearly')
-                and (rt.amount, rt.transaction_type, rt.account_id) in _paid_this_month
-            ):
-                occ = occ + step
-        while occ <= daily_end:
-            daily_events.append({'date': occ, 'amount': rt.amount, 'kind': kind, 'label': rt.name})
-            occ = occ + step
+    daily_events = _build_daily_recurring_events(
+        RecurringTransaction.objects.filter(user=user, is_active=True),
+        _linked_this_cycle, _paid_this_cycle, first_of_month, today, daily_end,
+    )
 
-    # Credits not already covered by a recurring expense (same rule as monthly_credits),
-    # charged on their start-date day-of-month each month within the window.
     for credit in uncovered.exclude(credit_type='revolving'):
         amount = (credit.monthly_payment or Decimal('0')) + (credit.insurance_monthly or Decimal('0'))
         if amount == 0:
@@ -254,19 +272,13 @@ def build_engine_from_user(user, overrides: dict = None, cycle_start_day: int = 
         for pay_date in _monthly_charge_dates(credit.start_date.day, today, daily_end):
             daily_events.append({'date': pay_date, 'amount': Decimal(str(amount)), 'kind': 'credits', 'label': credit.name})
 
-    decimal_overrides = {}
-    if overrides:
-        for k, v in overrides.items():
-            if k in ('income', 'expenses', 'credits', 'extra_expenses') and v is not None:
-                decimal_overrides[k] = Decimal(str(v))
-
     return ProjectionEngine(
         current_balance=total_balance,
         monthly_income=monthly_income,
         monthly_expenses=monthly_expenses,
         monthly_credits=monthly_credits,
         yearly_events=yearly_events,
-        overrides=decimal_overrides,
+        overrides=_parse_overrides(overrides),
         daily_events=daily_events,
     )
 
@@ -276,7 +288,6 @@ def build_engine_for_account(user, account_id: int, overrides: dict = None, cycl
     from django.db.models import Sum
     from apps.accounts.models import Account
     from apps.accounts.services import get_account_balance
-    from apps.credits.models import Credit, CreditDraw
     from apps.recurring.models import RecurringTransaction
 
     try:
@@ -322,25 +333,10 @@ def build_engine_for_account(user, account_id: int, overrides: dict = None, cycl
             occ = occ + relativedelta(years=1)
 
     # Credits: include uncovered credits (assumed paid from checking account)
-    covered_credit_ids = list(
-        RecurringTransaction.objects.filter(
-            user=user, is_active=True, credit__isnull=False,
-            transaction_type='expense', frequency__in=('monthly', 'weekly'),
-        ).values_list('credit_id', flat=True).distinct()
-    )
-    uncovered = Credit.objects.filter(user=user, is_active=True).exclude(id__in=covered_credit_ids)
-    credit_agg = uncovered.exclude(credit_type='revolving').aggregate(
-        p=Sum('monthly_payment'), ins=Sum('insurance_monthly')
-    )
-    monthly_credits = (credit_agg['p'] or Decimal('0')) + (credit_agg['ins'] or Decimal('0'))
-    revolving_draws = CreditDraw.objects.filter(
-        credit__in=uncovered.filter(credit_type='revolving'), is_active=True,
-    ).aggregate(t=Sum('monthly_payment'))['t']
-    monthly_credits += (revolving_draws or Decimal('0'))
+    uncovered, monthly_credits = _compute_uncovered_credits(user)
 
     # Daily events: recurring filtered by account_id + credit charges (uncovered)
     daily_end = today + timedelta(days=62)
-    daily_events = []
 
     from apps.transactions.models import Transaction as _Tx
     from apps.preferences.cycle import get_cycle_start
@@ -349,32 +345,13 @@ def build_engine_for_account(user, account_id: int, overrides: dict = None, cycl
         _Tx.objects.filter(user=user, date__gte=first_of_month, date__lte=today, account_id=account_id)
         .values('amount', 'transaction_type', 'account_id', 'recurring_transaction_id')
     )
-    _linked_this_month = {r['recurring_transaction_id'] for r in _month_rows if r['recurring_transaction_id']}
-    _paid_this_month = {(r['amount'], r['transaction_type'], r['account_id']) for r in _month_rows}
+    _linked_this_cycle = {r['recurring_transaction_id'] for r in _month_rows if r['recurring_transaction_id']}
+    _paid_this_cycle = {(r['amount'], r['transaction_type'], r['account_id']) for r in _month_rows}
 
-    _freq_step = {
-        'weekly': relativedelta(weeks=1),
-        'monthly': relativedelta(months=1),
-        'yearly': relativedelta(years=1),
-    }
-    for rt in RecurringTransaction.objects.filter(user=user, is_active=True, account_id=account_id):
-        step = _freq_step.get(rt.frequency)
-        if step is None:
-            continue
-        kind = 'income' if rt.transaction_type == 'income' else 'expenses'
-        occ = rt.next_occurrence
-        while occ <= today:
-            occ = occ + step
-        cycle_end = first_of_month + relativedelta(months=1)
-        if occ < cycle_end:
-            if rt.id in _linked_this_month or (
-                rt.frequency in ('monthly', 'yearly')
-                and (rt.amount, rt.transaction_type, rt.account_id) in _paid_this_month
-            ):
-                occ = occ + step
-        while occ <= daily_end:
-            daily_events.append({'date': occ, 'amount': rt.amount, 'kind': kind, 'label': rt.name})
-            occ = occ + step
+    daily_events = _build_daily_recurring_events(
+        RecurringTransaction.objects.filter(user=user, is_active=True, account_id=account_id),
+        _linked_this_cycle, _paid_this_cycle, first_of_month, today, daily_end,
+    )
 
     for credit in uncovered.exclude(credit_type='revolving'):
         amount = (credit.monthly_payment or Decimal('0')) + (credit.insurance_monthly or Decimal('0'))
@@ -390,19 +367,13 @@ def build_engine_for_account(user, account_id: int, overrides: dict = None, cycl
         for pay_date in _monthly_charge_dates(credit.start_date.day, today, daily_end):
             daily_events.append({'date': pay_date, 'amount': Decimal(str(amount)), 'kind': 'credits', 'label': credit.name})
 
-    decimal_overrides = {}
-    if overrides:
-        for k, v in overrides.items():
-            if k in ('income', 'expenses', 'credits', 'extra_expenses') and v is not None:
-                decimal_overrides[k] = Decimal(str(v))
-
     return ProjectionEngine(
         current_balance=current_balance,
         monthly_income=monthly_income,
         monthly_expenses=monthly_expenses,
         monthly_credits=monthly_credits,
         yearly_events=yearly_events,
-        overrides=decimal_overrides,
+        overrides=_parse_overrides(overrides),
         daily_events=daily_events,
     )
 

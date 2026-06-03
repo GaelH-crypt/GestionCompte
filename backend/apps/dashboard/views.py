@@ -140,7 +140,7 @@ def balance_history(request):
             label = (
                 f"{cycle_start.day} {cycle_start.strftime('%b')}"
                 f" → "
-                f"{cycle_end_inclusive.day} {cycle_end_inclusive.strftime('%b')}"
+                f"{cycle_end_inclusive.day} {cycle_end_inclusive.strftime('%b %Y')}"
             )
 
         data.append({
