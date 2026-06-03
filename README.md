@@ -2,6 +2,14 @@
 
 Application web de gestion financière personnelle, entièrement auto-hébergée. Gérez vos comptes bancaires, suivez vos dépenses et revenus, planifiez vos projections financières et simulez des scénarios sans impacter vos données réelles.
 
+## Mise à jour
+
+Après toute modification du code frontend ou backend :
+
+```bash
+cd /gestioncompte/frontend && npm run build && docker compose restart backend nginx
+```
+
 ## Fonctionnalités
 
 - **Comptes** — Comptes courants, épargne, espèces, autres
