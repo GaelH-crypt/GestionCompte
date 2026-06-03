@@ -44,7 +44,7 @@ docker compose up -d --build frontend && docker compose restart backend
 
 ```bash
 # 1. Cloner le dépôt
-git clone <url-du-depot> gestioncompte
+git clone https://github.com/GaelH-crypt/GestionCompte gestioncompte
 cd gestioncompte
 
 # 2. Configurer les variables d'environnement
