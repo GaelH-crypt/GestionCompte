@@ -93,7 +93,7 @@ class DashboardCycleStartDayTest(TestCase):
         self.assertEqual(resp.data['month_income'], 0.0)
 
     def test_balance_history_default_label_no_arrow(self):
-        resp = self.client.get('/api/dashboard/balance-history/')
+        resp = self.client.get('/api/dashboard/history/')
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(len(resp.data), 12)
         for entry in resp.data:
@@ -102,7 +102,7 @@ class DashboardCycleStartDayTest(TestCase):
     def test_balance_history_custom_cycle_label_has_arrow(self):
         from apps.preferences.models import UserPreference
         UserPreference.objects.create(user=self.user, cycle_start_day=25)
-        resp = self.client.get('/api/dashboard/balance-history/')
+        resp = self.client.get('/api/dashboard/history/')
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(len(resp.data), 12)
         for entry in resp.data:
@@ -111,6 +111,6 @@ class DashboardCycleStartDayTest(TestCase):
     def test_balance_history_returns_12_entries(self):
         from apps.preferences.models import UserPreference
         UserPreference.objects.create(user=self.user, cycle_start_day=25)
-        resp = self.client.get('/api/dashboard/balance-history/')
+        resp = self.client.get('/api/dashboard/history/')
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(len(resp.data), 12)
