@@ -79,17 +79,18 @@ class TransactionViewSet(viewsets.ModelViewSet):
             .annotate(count=Count('id'), total=Sum('amount'))
             .order_by('category__name')
         )
-        total_abs = sum(abs(float(row['total'] or 0)) for row in summary_qs)
+        summary_rows = list(summary_qs)
+        total_abs = sum(abs(float(row['total'] or 0)) for row in summary_rows)
 
         summary = []
-        for row in summary_qs:
+        for row in summary_rows:
             row_total = float(row['total'] or 0)
             pct = round(abs(row_total) / total_abs * 100, 1) if total_abs else 0
             summary.append({
                 'category_name': row['category__name'] or 'Sans catégorie',
                 'category_color': row['category__color'] or '#6b7280',
                 'count': row['count'],
-                'total': str(row['total']),
+                'total': str(row['total'] or '0.00'),
                 'percentage': pct,
             })
 

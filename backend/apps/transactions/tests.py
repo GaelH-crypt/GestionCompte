@@ -307,6 +307,8 @@ class AnalyseViewTest(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(len(resp.data['transactions']), 1)
         self.assertEqual(resp.data['transactions'][0]['description'], 'Salaire')
+        self.assertEqual(len(resp.data['summary']), 1)  # 'Sans catégorie' since income tx has no category
+        self.assertEqual(resp.data['summary'][0]['category_name'], 'Sans catégorie')
 
     def test_analyse_no_auth(self):
         unauthenticated = APIClient()
