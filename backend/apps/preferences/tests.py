@@ -150,3 +150,9 @@ class GetCycleStartNthAgoTest(_DjangoTestCase):
 
     def test_n11_is_eleven_cycles_ago(self):
         self.assertEqual(self._f(_date_class(2026, 6, 3), 25, 11), _date_class(2025, 6, 25))
+
+    def test_clamped_day_propagation_fixed(self):
+        # cycle_start_day=31, today=2026-03-05
+        # n=1 must return 2026-01-31 (January has 31 days), NOT 2026-01-28
+        # (old bug: subtracted from clamped Feb-28 → Jan-28)
+        self.assertEqual(self._f(_date_class(2026, 3, 5), 31, 1), _date_class(2026, 1, 31))

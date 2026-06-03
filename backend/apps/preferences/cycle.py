@@ -11,5 +11,5 @@ def get_cycle_start(today: date, cycle_start_day: int) -> date:
 
 
 def get_cycle_start_nth_ago(today: date, cycle_start_day: int, n: int) -> date:
-    current = get_cycle_start(today, cycle_start_day)
-    return current - relativedelta(months=n)
+    shifted = today - relativedelta(months=n)
+    return get_cycle_start(shifted, cycle_start_day)

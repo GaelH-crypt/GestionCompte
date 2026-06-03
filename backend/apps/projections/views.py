@@ -69,6 +69,8 @@ def simulation_view(request):
         months = int(request.data.get('months', 12))
     except (ValueError, TypeError):
         months = 12
+    if months not in VALID_HORIZONS:
+        return Response({'error': 'months must be 1, 3, 6, 12 or 60'}, status=status.HTTP_400_BAD_REQUEST)
 
     overrides = {}
     for k in ('income', 'expenses', 'credits'):

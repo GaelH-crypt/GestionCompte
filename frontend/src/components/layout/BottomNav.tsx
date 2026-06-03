@@ -3,7 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom'
 import { clsx } from 'clsx'
 import {
   LayoutDashboard, ArrowLeftRight, CreditCard, TrendingUp, MoreHorizontal,
-  Tag, PiggyBank, RefreshCw, CalendarDays, Beaker, Building2, Settings,
+  Tag, PiggyBank, RefreshCw, CalendarDays, Beaker, Building2, Settings, BarChart2,
 } from 'lucide-react'
 
 const MAIN_ITEMS = [
@@ -16,9 +16,10 @@ const MAIN_ITEMS = [
 const MORE_ITEMS = [
   { to: '/categories', icon: Tag, label: 'Catégories' },
   { to: '/credits', icon: PiggyBank, label: 'Crédits' },
-  { to: '/recurring', icon: RefreshCw, label: 'Charges fixes' },
+  { to: '/recurring', icon: RefreshCw, label: 'Flux récurrents' },
   { to: '/schedule', icon: CalendarDays, label: 'Échéancier' },
   { to: '/simulations', icon: Beaker, label: 'Simulations' },
+  { to: '/analyse', icon: BarChart2, label: 'Analyse' },
   { to: '/bank-sync', icon: Building2, label: 'Sync bancaire' },
   { to: '/settings', icon: Settings, label: 'Paramètres' },
 ]
