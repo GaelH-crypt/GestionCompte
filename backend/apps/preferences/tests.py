@@ -64,3 +64,54 @@ class PreferencesAPITest(TestCase):
         unauth = APIClient()
         resp = unauth.get('/api/preferences/')
         self.assertEqual(resp.status_code, 401)
+
+
+from datetime import date as _date_class
+from django.test import TestCase as _DjangoTestCase
+
+
+class GetCycleStartTest(_DjangoTestCase):
+    def _f(self, today, day):
+        from apps.preferences.cycle import get_cycle_start
+        return get_cycle_start(today, day)
+
+    def test_day1_equals_first_of_month(self):
+        self.assertEqual(self._f(_date_class(2026, 6, 3), 1), _date_class(2026, 6, 1))
+
+    def test_day1_on_first(self):
+        self.assertEqual(self._f(_date_class(2026, 6, 1), 1), _date_class(2026, 6, 1))
+
+    def test_before_start_day_returns_prev_month(self):
+        self.assertEqual(self._f(_date_class(2026, 6, 3), 25), _date_class(2026, 5, 25))
+
+    def test_on_start_day_returns_current_month(self):
+        self.assertEqual(self._f(_date_class(2026, 6, 25), 25), _date_class(2026, 6, 25))
+
+    def test_after_start_day_returns_current_month(self):
+        self.assertEqual(self._f(_date_class(2026, 6, 26), 25), _date_class(2026, 6, 25))
+
+    def test_jan_before_start_wraps_to_dec(self):
+        self.assertEqual(self._f(_date_class(2026, 1, 5), 25), _date_class(2025, 12, 25))
+
+    def test_short_month_clamps_day(self):
+        # Feb 2026 has 28 days; cycle_start_day=31 → clamped to 28
+        self.assertEqual(self._f(_date_class(2026, 3, 1), 31), _date_class(2026, 2, 28))
+
+    def test_leap_year_feb(self):
+        # Feb 2024 has 29 days (leap); cycle_start_day=31 → clamped to 29
+        self.assertEqual(self._f(_date_class(2024, 3, 1), 31), _date_class(2024, 2, 29))
+
+
+class GetCycleStartNthAgoTest(_DjangoTestCase):
+    def _f(self, today, day, n):
+        from apps.preferences.cycle import get_cycle_start_nth_ago
+        return get_cycle_start_nth_ago(today, day, n)
+
+    def test_n0_is_current_cycle(self):
+        self.assertEqual(self._f(_date_class(2026, 6, 3), 25, 0), _date_class(2026, 5, 25))
+
+    def test_n1_is_previous_cycle(self):
+        self.assertEqual(self._f(_date_class(2026, 6, 3), 25, 1), _date_class(2026, 4, 25))
+
+    def test_n11_is_eleven_cycles_ago(self):
+        self.assertEqual(self._f(_date_class(2026, 6, 3), 25, 11), _date_class(2025, 6, 25))
