@@ -11,6 +11,7 @@ class UserPreference(models.Model):
         on_delete=models.SET_NULL,
         related_name='+',
     )
+    cycle_start_day = models.PositiveSmallIntegerField(default=1)
 
     def __str__(self):
         return f'Prefs({self.user})'
