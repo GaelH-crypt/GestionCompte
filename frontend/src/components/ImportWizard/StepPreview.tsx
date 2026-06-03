@@ -65,7 +65,7 @@ export function StepPreview({ transactions, mapping, duplicateCounts, categories
                           checked={tx.is_recurring ?? false}
                           onChange={(e) => onRecurringChange(rib, i, e.target.checked)}
                           className="accent-brand-500 h-3.5 w-3.5 cursor-pointer"
-                          title="Charge fixe / récurrente"
+                          title="Flux récurrent"
                         />
                       </td>
                     </tr>
