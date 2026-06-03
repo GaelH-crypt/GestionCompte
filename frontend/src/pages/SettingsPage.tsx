@@ -18,7 +18,7 @@ export default function SettingsPage() {
 
   const { data: accounts, isLoading: loadingAccounts } = useQuery({
     queryKey: ['accounts'],
-    queryFn: () => accountsApi.list().then((r) => r.data),
+    queryFn: () => accountsApi.list().then((r) => r.data.results),
   })
 
   const accountMutation = useMutation({
@@ -49,7 +49,7 @@ export default function SettingsPage() {
 
   if (loadingPrefs || loadingAccounts) return <PageSpinner />
 
-  const activeAccounts = (accounts?.results ?? []).filter(
+  const activeAccounts = (accounts ?? []).filter(
     (a) => a.is_active && a.account_type === 'checking'
   )
 
