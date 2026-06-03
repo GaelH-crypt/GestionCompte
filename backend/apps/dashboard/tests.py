@@ -64,3 +64,53 @@ class DashboardCheckingAccountTest(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data['checking_account_id'], self.account.id)
         self.assertAlmostEqual(resp.data['checking_account_balance'], 2500.0, places=1)
+
+
+class DashboardCycleStartDayTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user('cycleuser', password='p')
+        self.client.force_authenticate(user=self.user)
+        self.account = Account.objects.create(
+            user=self.user, name='CC', account_type='checking', initial_balance=1000,
+        )
+
+    def test_month_income_excludes_transaction_before_cycle_start(self):
+        from apps.preferences.cycle import get_cycle_start
+        from apps.preferences.models import UserPreference
+        from apps.transactions.models import Transaction
+        from datetime import date, timedelta
+        today = date.today()
+        UserPreference.objects.create(user=self.user, cycle_start_day=25)
+        before_cycle = get_cycle_start(today, 25) - timedelta(days=1)
+        Transaction.objects.create(
+            user=self.user, account=self.account,
+            amount='500.00', transaction_type='income',
+            date=before_cycle, description='Hors cycle',
+        )
+        resp = self.client.get('/api/dashboard/summary/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['month_income'], 0.0)
+
+    def test_balance_history_default_label_no_arrow(self):
+        resp = self.client.get('/api/dashboard/balance-history/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.data), 12)
+        for entry in resp.data:
+            self.assertNotIn('→', entry['month'])
+
+    def test_balance_history_custom_cycle_label_has_arrow(self):
+        from apps.preferences.models import UserPreference
+        UserPreference.objects.create(user=self.user, cycle_start_day=25)
+        resp = self.client.get('/api/dashboard/balance-history/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.data), 12)
+        for entry in resp.data:
+            self.assertIn('→', entry['month'])
+
+    def test_balance_history_returns_12_entries(self):
+        from apps.preferences.models import UserPreference
+        UserPreference.objects.create(user=self.user, cycle_start_day=25)
+        resp = self.client.get('/api/dashboard/balance-history/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.data), 12)
