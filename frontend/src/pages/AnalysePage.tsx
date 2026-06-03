@@ -112,6 +112,7 @@ export default function AnalysePage() {
               <option value="">Tous</option>
               <option value="expense">Dépense</option>
               <option value="income">Revenu</option>
+              <option value="transfer">Virement</option>
             </select>
           </div>
         </div>

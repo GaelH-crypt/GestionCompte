@@ -52,7 +52,7 @@ export function LinkRecurringModal({ transaction, onClose }: Props) {
     >
       <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 flex flex-col gap-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">Lier à une charge fixe</h2>
+          <h2 className="text-lg font-semibold text-white">Lier à un flux récurrent</h2>
           <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors">✕</button>
         </div>
 
@@ -65,14 +65,14 @@ export function LinkRecurringModal({ transaction, onClose }: Props) {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Rechercher une charge fixe…"
+            placeholder="Rechercher un flux récurrent…"
             className={`${sel} pl-9 w-full`}
           />
         </div>
 
         <div className="overflow-y-auto max-h-64 flex flex-col gap-1">
           {filtered.length === 0 && (
-            <p className="text-sm text-gray-500 text-center py-6">Aucune charge fixe compatible.</p>
+            <p className="text-sm text-gray-500 text-center py-6">Aucun flux récurrent compatible.</p>
           )}
           {filtered.map((rt) => (
             <button

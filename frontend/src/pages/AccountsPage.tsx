@@ -130,6 +130,7 @@ export default function AccountsPage() {
         <div>
           <p className="text-sm text-gray-400 mb-1">Solde total</p>
           <p className="text-3xl font-bold text-white">{formatEur(totalBalance)}</p>
+          <p className="text-xs text-gray-500">Hors comptes crédit</p>
         </div>
         <Button onClick={() => { setEditing(null); setShowForm(true) }}>
           <Plus className="h-4 w-4" /> Nouveau compte

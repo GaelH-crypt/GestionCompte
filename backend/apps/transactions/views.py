@@ -51,11 +51,11 @@ class TransactionViewSet(viewsets.ModelViewSet):
         try:
             rt = RecurringTransaction.objects.get(id=recurring_id, user=request.user, is_active=True)
         except RecurringTransaction.DoesNotExist:
-            return Response({'detail': 'Charge fixe introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'detail': 'Flux récurrent introuvable.'}, status=status.HTTP_404_NOT_FOUND)
 
         if rt.transaction_type != tx.transaction_type:
             return Response(
-                {'detail': 'Le type de la charge fixe ne correspond pas à la transaction.'},
+                {'detail': 'Le type du flux récurrent ne correspond pas à la transaction.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 

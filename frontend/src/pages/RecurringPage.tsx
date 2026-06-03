@@ -160,7 +160,7 @@ export default function RecurringPage() {
                 <tr>
                   <td colSpan={9} className="px-6 py-12 text-center text-sm text-gray-500">
                     <RefreshCw className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                    Aucune charge récurrente configurée.
+                    Aucun flux récurrent configuré.
                   </td>
                 </tr>
               )}

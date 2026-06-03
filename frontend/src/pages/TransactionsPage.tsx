@@ -245,7 +245,7 @@ export default function TransactionsPage() {
                             ? 'text-brand-500 hover:bg-brand-500/10'
                             : 'text-gray-500 hover:text-white hover:bg-gray-800'
                         }`}
-                        title={tx.recurring_transaction_name ?? 'Lier à une charge fixe'}
+                        title={tx.recurring_transaction_name ?? 'Lier à un flux récurrent'}
                       >
                         <Link2 className="h-3.5 w-3.5" />
                       </button>
