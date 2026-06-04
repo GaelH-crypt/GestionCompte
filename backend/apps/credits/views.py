@@ -34,11 +34,16 @@ class CreditDrawViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         from decimal import Decimal
-        from rest_framework.exceptions import ValidationError
-        credit = get_object_or_404(Credit, pk=self.kwargs['credit_pk'], user=self.request.user)
-        if credit.max_amount is not None:
-            used = sum(d.amount for d in credit.draws.filter(is_active=True))
-            available = Decimal(str(credit.max_amount)) - used
-            if Decimal(str(serializer.validated_data['amount'])) > available:
-                raise ValidationError({'amount': f'Dépasse le plafond disponible ({available} € restants).'})
-        serializer.save(credit=credit)
+        from rest_framework.exceptions import ValidationError, NotFound
+        from django.db import transaction as db_transaction
+        with db_transaction.atomic():
+            try:
+                credit = Credit.objects.select_for_update().get(pk=self.kwargs['credit_pk'], user=self.request.user)
+            except Credit.DoesNotExist:
+                raise NotFound()
+            if credit.max_amount is not None:
+                used = sum(d.amount for d in credit.draws.filter(is_active=True))
+                available = Decimal(str(credit.max_amount)) - used
+                if Decimal(str(serializer.validated_data['amount'])) > available:
+                    raise ValidationError({'amount': f'Dépasse le plafond disponible ({available} € restants).'})
+            serializer.save(credit=credit)

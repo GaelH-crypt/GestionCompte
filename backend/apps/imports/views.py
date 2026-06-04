@@ -6,6 +6,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
+from django.db import transaction as db_transaction
 
 from apps.imports.services.parser import parse_excel, ParseError, ColumnMappingRequired
 from apps.imports.services.categorizer import suggest_category
@@ -170,34 +171,35 @@ class ConfirmView(APIView):
                     date_str = str(date_val)
                 existing_txs.add((date_str, Decimal(str(amount_val)).quantize(Decimal('0.01')), desc))
 
-            for tx in txs:
-                try:
-                    amount = Decimal(str(tx['amount'])).quantize(Decimal('0.01'))
-                except Exception:
-                    continue
-                date_str = str(tx['date'])
-                desc = tx['description'][:255]
-                key = (date_str, amount, desc)
-                if key in existing_txs:
-                    continue
+            with db_transaction.atomic():
+                for tx in txs:
+                    try:
+                        amount = Decimal(str(tx['amount'])).quantize(Decimal('0.01'))
+                    except Exception:
+                        continue
+                    date_str = str(tx['date'])
+                    desc = tx['description'][:255]
+                    key = (date_str, amount, desc)
+                    if key in existing_txs:
+                        continue
 
-                category = categories_by_id.get(tx.get('category_id'))
+                    category = categories_by_id.get(tx.get('category_id'))
 
-                new_tx = Transaction.objects.create(
-                    user=request.user,
-                    account=account,
-                    transaction_type=tx['transaction_type'],
-                    amount=amount,
-                    description=desc,
-                    date=tx['date'],
-                    category=category,
-                    is_recurring=bool(tx.get('is_recurring', False)),
-                    note='',
-                    tags=[],
-                )
-                if category is None:
-                    created_ids.append(new_tx.id)
-                created_transactions += 1
+                    new_tx = Transaction.objects.create(
+                        user=request.user,
+                        account=account,
+                        transaction_type=tx['transaction_type'],
+                        amount=amount,
+                        description=desc,
+                        date=tx['date'],
+                        category=category,
+                        is_recurring=bool(tx.get('is_recurring', False)),
+                        note='',
+                        tags=[],
+                    )
+                    if category is None:
+                        created_ids.append(new_tx.id)
+                    created_transactions += 1
 
         if created_ids:
             try:
