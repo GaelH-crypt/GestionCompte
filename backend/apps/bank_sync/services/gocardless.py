@@ -8,8 +8,15 @@ logger = logging.getLogger(__name__)
 
 BASE_URL = 'https://bankaccountdata.gocardless.com/api/v2'
 
-GOCARDLESS_SECRET_ID = config('GOCARDLESS_SECRET_ID', default='')
-GOCARDLESS_SECRET_KEY = config('GOCARDLESS_SECRET_KEY', default='')
+GOCARDLESS_SECRET_ID = config('GOCARDLESS_SECRET_ID', default=None)
+GOCARDLESS_SECRET_KEY = config('GOCARDLESS_SECRET_KEY', default=None)
+
+if not GOCARDLESS_SECRET_ID or not GOCARDLESS_SECRET_KEY:
+    import warnings
+    warnings.warn(
+        "GoCardless credentials not configured — bank sync will be unavailable",
+        RuntimeWarning,
+    )
 
 
 class GoCardlessError(Exception):
