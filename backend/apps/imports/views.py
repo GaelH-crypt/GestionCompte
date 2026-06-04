@@ -141,37 +141,37 @@ class ConfirmView(APIView):
                     return v
             return {}
 
-        for rib, txs in transactions_payload.items():
-            account_config = _find_config(rib)
-            account_id = account_config.get('id')
-            if not account_id:
-                skipped_ribs.append(rib)
-                continue
+        with db_transaction.atomic():
+            for rib, txs in transactions_payload.items():
+                account_config = _find_config(rib)
+                account_id = account_config.get('id')
+                if not account_id:
+                    skipped_ribs.append(rib)
+                    continue
 
-            try:
-                account = Account.objects.get(id=account_id, user=request.user)
-            except Account.DoesNotExist:
-                return Response(
-                    {'error': f'Compte {account_id} introuvable ou inaccessible.'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+                try:
+                    account = Account.objects.get(id=account_id, user=request.user)
+                except Account.DoesNotExist:
+                    return Response(
+                        {'error': f'Compte {account_id} introuvable ou inaccessible.'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
 
-            if account.is_import_ignored:
-                skipped_ribs.append(rib)
-                continue
+                if account.is_import_ignored:
+                    skipped_ribs.append(rib)
+                    continue
 
-            # Normalize existing transactions to (date_string, Decimal, str) for comparison
-            existing_txs = set()
-            for date_val, amount_val, desc in Transaction.objects.filter(account=account).values_list(
-                'date', 'amount', 'description'
-            ):
-                if isinstance(date_val, datetime.date):
-                    date_str = date_val.strftime('%Y-%m-%d')
-                else:
-                    date_str = str(date_val)
-                existing_txs.add((date_str, Decimal(str(amount_val)).quantize(Decimal('0.01')), desc))
+                # Normalize existing transactions to (date_string, Decimal, str) for comparison
+                existing_txs = set()
+                for date_val, amount_val, desc in Transaction.objects.filter(account=account).values_list(
+                    'date', 'amount', 'description'
+                ):
+                    if isinstance(date_val, datetime.date):
+                        date_str = date_val.strftime('%Y-%m-%d')
+                    else:
+                        date_str = str(date_val)
+                    existing_txs.add((date_str, Decimal(str(amount_val)).quantize(Decimal('0.01')), desc))
 
-            with db_transaction.atomic():
                 for tx in txs:
                     try:
                         amount = Decimal(str(tx['amount'])).quantize(Decimal('0.01'))
