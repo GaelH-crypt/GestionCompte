@@ -67,6 +67,7 @@ def _parse_account_sheet(xl: pd.ExcelFile, sheet_name: str) -> tuple[str, list[d
                 rib = parts[-1].strip()
 
     df = xl.parse(sheet_name, header=3)
+    df = df.head(10000)
     if df.shape[1] < 5:
         return rib, []
     df = df.iloc[:, :7]
