@@ -39,3 +39,4 @@ Thumbs.db
 # Superpowers internal tooling
 docs/superpowers/
 .claude/
+.worktrees/
