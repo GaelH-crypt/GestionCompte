@@ -14,6 +14,10 @@ client.interceptors.request.use((config) => {
   return config
 })
 
+// Shared promise so concurrent 401s share one refresh call instead of each
+// trying to rotate the same refresh token (which blacklists it after first use).
+let refreshPromise: Promise<string> | null = null
+
 client.interceptors.response.use(
   (res) => res,
   async (error) => {
@@ -21,15 +25,26 @@ client.interceptors.response.use(
     if (error.response?.status === 401 && !original._retry) {
       original._retry = true
       try {
-        const refreshToken = useAuthStore.getState().refreshToken
-        if (!refreshToken) throw new Error('No refresh token')
-        const { data } = await axios.post('/api/auth/refresh/', { refresh: refreshToken })
-        useAuthStore.getState().setTokens(data.access, refreshToken)
-        original.headers.Authorization = `Bearer ${data.access}`
+        if (!refreshPromise) {
+          const refreshToken = useAuthStore.getState().refreshToken
+          if (!refreshToken) throw new Error('No refresh token')
+          refreshPromise = axios
+            .post('/api/auth/refresh/', { refresh: refreshToken })
+            .then(({ data }) => {
+              useAuthStore.getState().setTokens(data.access, data.refresh)
+              return data.access as string
+            })
+            .finally(() => {
+              refreshPromise = null
+            })
+        }
+        const newAccessToken = await refreshPromise
+        original.headers.Authorization = `Bearer ${newAccessToken}`
         return client(original)
       } catch {
         useAuthStore.getState().logout()
         window.location.href = '/login'
+        return Promise.reject(error)
       }
     }
     return Promise.reject(error)
