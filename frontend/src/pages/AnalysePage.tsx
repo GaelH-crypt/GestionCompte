@@ -93,24 +93,26 @@ export default function AnalysePage() {
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
     )
 
-    // Recalculate summary from merged transactions
-    const catMap = new Map<string, { total: number; count: number; color: string }>()
+    // Recalculate summary from merged transactions, keyed by category ID so
+    // same-named subcategories under different parents stay distinct.
+    const catMap = new Map<number | 'none', { name: string; total: number; count: number; color: string }>()
     for (const tx of transactions) {
-      const key = tx.category_name ?? 'Sans catégorie'
-      const color = colorMap.get(key) ?? '#6b7280'
+      const key = tx.category ?? 'none'
+      const name = tx.category_name ?? 'Sans catégorie'
+      const color = colorMap.get(name) ?? '#6b7280'
       const signed = tx.transaction_type === 'income' ? parseFloat(tx.amount) : -parseFloat(tx.amount)
       const entry = catMap.get(key)
       if (entry) {
         entry.total += signed
         entry.count++
       } else {
-        catMap.set(key, { total: signed, count: 1, color })
+        catMap.set(key, { name, total: signed, count: 1, color })
       }
     }
     const absoluteTotal = Array.from(catMap.values()).reduce((s, v) => s + Math.abs(v.total), 0)
-    const summary = Array.from(catMap.entries())
-      .map(([name, v]) => ({
-        category_name: name,
+    const summary = Array.from(catMap.values())
+      .map((v) => ({
+        category_name: v.name,
         category_color: v.color,
         count: v.count,
         total: v.total.toFixed(2),
