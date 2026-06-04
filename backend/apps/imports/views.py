@@ -172,12 +172,19 @@ class ConfirmView(APIView):
                         date_str = str(date_val)
                     existing_txs.add((date_str, Decimal(str(amount_val)).quantize(Decimal('0.01')), desc))
 
+                VALID_TYPES = {'expense', 'income', 'transfer'}
                 for tx in txs:
+                    if tx.get('transaction_type') not in VALID_TYPES:
+                        continue
+                    try:
+                        date_obj = datetime.date.fromisoformat(str(tx.get('date', '')))
+                    except ValueError:
+                        continue
                     try:
                         amount = Decimal(str(tx['amount'])).quantize(Decimal('0.01'))
                     except Exception:
                         continue
-                    date_str = str(tx['date'])
+                    date_str = date_obj.strftime('%Y-%m-%d')
                     desc = tx['description'][:255]
                     key = (date_str, amount, desc)
                     if key in existing_txs:
@@ -191,7 +198,7 @@ class ConfirmView(APIView):
                         transaction_type=tx['transaction_type'],
                         amount=amount,
                         description=desc,
-                        date=tx['date'],
+                        date=date_obj,
                         category=category,
                         is_recurring=bool(tx.get('is_recurring', False)),
                         note='',

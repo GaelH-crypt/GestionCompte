@@ -1,8 +1,8 @@
 from django.contrib import admin
+from django.conf import settings
 from django.urls import path, include
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
     path('api/auth/', include('apps.authentication.urls')),
     path('api/accounts/', include('apps.accounts.urls')),
     path('api/categories/', include('apps.categories.urls')),
@@ -15,3 +15,6 @@ urlpatterns = [
     path('api/bank-sync/', include('apps.bank_sync.urls')),
     path('api/preferences/', include('apps.preferences.urls')),
 ]
+
+if settings.DEBUG:
+    urlpatterns += [path('admin/', admin.site.urls)]
