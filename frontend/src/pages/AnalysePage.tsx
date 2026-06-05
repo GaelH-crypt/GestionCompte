@@ -12,8 +12,10 @@ import { fr } from 'date-fns/locale'
 import type { AnalyseParams, Transaction } from '@/types'
 import { renderCategoryOptions } from '@/utils/categoryOptions'
 
+type FilterRow = AnalyseParams & { id: string }
+
 const formatEur = (n: number | string) =>
-  new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(parseFloat(String(n)))
+  new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(parseFloat(String(n)) || 0)
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10)
@@ -24,8 +26,9 @@ function firstOfMonthStr() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
 }
 
-function defaultRow(): AnalyseParams {
+function defaultRow(): FilterRow {
   return {
+    id: crypto.randomUUID(),
     date_from: firstOfMonthStr(),
     date_to: todayStr(),
     account: '',
@@ -48,8 +51,8 @@ const sel = 'bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm tex
 const inp = 'bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 w-full focus:outline-none focus:ring-2 focus:ring-brand-500'
 
 export default function AnalysePage() {
-  const [rows, setRows] = useState<AnalyseParams[]>([defaultRow()])
-  const [activeRows, setActiveRows] = useState<AnalyseParams[] | null>(null)
+  const [rows, setRows] = useState<FilterRow[]>([defaultRow()])
+  const [activeRows, setActiveRows] = useState<FilterRow[] | null>(null)
 
   const { data: accountsData } = useQuery({
     queryKey: ['accounts'],
@@ -63,8 +66,8 @@ export default function AnalysePage() {
   const categories = categoriesData ?? []
 
   const queryResults = useQueries({
-    queries: (activeRows ?? []).map((p, i) => ({
-      queryKey: ['analyse', i, p],
+    queries: (activeRows ?? []).map((p) => ({
+      queryKey: ['analyse', p.id, p],
       queryFn: () => transactionsApi.analyse(buildQueryParams(p)).then((r) => r.data),
     })),
   })
@@ -124,7 +127,7 @@ export default function AnalysePage() {
   }, [queryResults, activeRows])
 
   function updateRow(idx: number, patch: Partial<AnalyseParams>) {
-    setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)))
+    setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch, id: r.id } : r)))
   }
 
   function addRow() {
@@ -286,7 +289,7 @@ export default function AnalysePage() {
                   {mergedData.transactions.map((tx) => (
                     <tr key={tx.id} className="border-b border-gray-800/50 hover:bg-gray-800/30">
                       <td className="px-6 py-3 text-sm text-gray-400 whitespace-nowrap">
-                        {format(new Date(tx.date), 'd MMM yyyy', { locale: fr })}
+                        {tx.date ? format(new Date(tx.date), 'd MMM yyyy', { locale: fr }) : '–'}
                       </td>
                       <td className="px-6 py-3 text-sm text-gray-200">{tx.description}</td>
                       <td className="px-6 py-3 text-sm text-gray-400">{tx.category_name ?? '—'}</td>

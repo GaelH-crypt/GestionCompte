@@ -20,7 +20,7 @@ import type { Transaction, TransactionType, Frequency, RecurringSuggestion } fro
 import { renderCategoryOptions } from '@/utils/categoryOptions'
 
 const formatEur = (n: number | string) =>
-  new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(parseFloat(String(n)))
+  new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(parseFloat(String(n)) || 0)
 
 const TYPE_ICON: Record<TransactionType, React.ReactNode> = {
   income: <ArrowUpCircle className="h-4 w-4 text-green-400" />,
@@ -228,7 +228,7 @@ export default function TransactionsPage() {
                     )}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-400 whitespace-nowrap truncate">
-                    {format(new Date(tx.date), 'd MMM yyyy', { locale: fr })}
+                    {tx.date ? format(new Date(tx.date), 'd MMM yyyy', { locale: fr }) : '–'}
                   </td>
                   <td
                     className={`px-4 py-3 text-sm font-semibold whitespace-nowrap truncate ${TYPE_COLOR[tx.transaction_type]}`}
@@ -256,7 +256,11 @@ export default function TransactionsPage() {
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
                       <button
-                        onClick={() => deleteMut.mutate(tx.id)}
+                        onClick={() => {
+                          if (window.confirm('Supprimer cette transaction ?')) {
+                            deleteMut.mutate(tx.id)
+                          }
+                        }}
                         className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-900/20 rounded-lg"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -309,7 +313,7 @@ export default function TransactionsPage() {
                 {tx.account_name}{tx.category_name ? ` · ${tx.category_name}` : ''}
               </span>
               <span className="text-xs text-gray-500 whitespace-nowrap ml-2">
-                {format(new Date(tx.date), 'd MMM yyyy', { locale: fr })}
+                {tx.date ? format(new Date(tx.date), 'd MMM yyyy', { locale: fr }) : '–'}
               </span>
             </div>
             {tx.recurring_transaction_name && (
@@ -325,7 +329,11 @@ export default function TransactionsPage() {
                 <Pencil className="h-3.5 w-3.5" />
               </button>
               <button
-                onClick={() => deleteMut.mutate(tx.id)}
+                onClick={() => {
+                  if (window.confirm('Supprimer cette transaction ?')) {
+                    deleteMut.mutate(tx.id)
+                  }
+                }}
                 className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-900/20 rounded-lg"
               >
                 <Trash2 className="h-3.5 w-3.5" />
@@ -615,6 +623,8 @@ function DetectRecurringModal({ onClose }: { onClose: () => void }) {
       qc.invalidateQueries({ queryKey: ['recurring'] })
       qc.invalidateQueries({ queryKey: ['projections'] })
       setSuggestions((prev) => prev!.filter((_, i) => i !== idx))
+    } catch {
+      alert('Erreur lors de la création de la récurrence')
     } finally {
       setAdding(null)
     }

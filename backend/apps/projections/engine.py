@@ -66,6 +66,9 @@ class ProjectionEngine:
     def project_daily(self, days: int) -> list:
         """Day-by-day projection: each cashflow lands on its real date, so the
         balance reflects intra-month fluctuations rather than a smoothed total."""
+        if days <= 0:
+            return []
+
         # Monthly override deltas (override - actual monthly value). Applied per day
         # at each day's calendar-month rate (delta / days_in_that_month) so that
         # every month in the window receives the full monthly delta. This matters
@@ -162,8 +165,13 @@ def _build_daily_recurring_events(recurring_qs, linked_this_cycle, paid_this_cyc
             continue
         kind = 'income' if rt.transaction_type == 'income' else 'expenses'
         occ = rt.next_occurrence
-        while occ < today:
+        MAX_CATCHUP = 1000
+        iterations = 0
+        while occ < today and iterations < MAX_CATCHUP:
             occ = occ + step
+            iterations += 1
+        if occ < today:
+            continue  # skip pathological record
         if occ < cycle_end:
             if rt.id in linked_this_cycle or (
                 # Heuristic only applies to monthly/yearly: weekly charges can have

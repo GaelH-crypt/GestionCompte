@@ -35,6 +35,12 @@ export default function ProjectionsPage() {
 
   if (isLoading || !data) return <PageSpinner />
 
+  if (!data.length) return (
+    <div className="flex flex-col items-center justify-center h-60 text-gray-500">
+      <p className="text-sm">Aucune projection disponible.</p>
+    </div>
+  )
+
   const isDaily = daily
   const first = data[0]
   const last = data[data.length - 1]

@@ -2,8 +2,10 @@ from decimal import Decimal
 from django.db.models import Sum, Q
 
 
-def get_account_balance(account) -> Decimal:
+def get_account_balance(account, user=None) -> Decimal:
     """Compute current balance = initial_balance + incomes - expenses - transfer_out + transfer_in."""
+    if user is not None and account.user_id != user.id:
+        raise PermissionError("Account does not belong to user")
     from apps.transactions.models import Transaction
 
     agg = Transaction.objects.filter(account=account).aggregate(

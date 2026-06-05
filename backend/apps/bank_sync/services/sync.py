@@ -14,13 +14,13 @@ from apps.bank_sync.services import gocardless
 logger = logging.getLogger(__name__)
 
 
-def _pick_description(tx: dict) -> str:
+def _pick_description(tx: dict, amount_decimal: Decimal) -> str:
     """Extract the best available description string from a GoCardless transaction dict."""
     candidates = [
         tx.get('remittanceInformationUnstructured'),
         tx.get('remittanceInformationStructured'),
-        tx.get('creditorName') if Decimal(tx.get('transactionAmount', {}).get('amount', '0')) < 0 else None,
-        tx.get('debtorName') if Decimal(tx.get('transactionAmount', {}).get('amount', '0')) >= 0 else None,
+        tx.get('creditorName') if amount_decimal < 0 else None,
+        tx.get('debtorName') if amount_decimal >= 0 else None,
         tx.get('creditorName'),
         tx.get('debtorName'),
         tx.get('additionalInformation'),
@@ -99,7 +99,7 @@ def sync_bank_account(bank_account: BankAccount, linked_account_id: int | None =
         amount = abs(amount_decimal)
 
         try:
-            description = _pick_description(tx)
+            description = _pick_description(tx, amount_decimal)
         except (InvalidOperation, TypeError):
             description = 'Transaction bancaire'
 
@@ -135,7 +135,7 @@ def sync_bank_account(bank_account: BankAccount, linked_account_id: int | None =
     try:
         with db_transaction.atomic():
             if to_create:
-                created = Transaction.objects.bulk_create(to_create, ignore_conflicts=True)
+                created = Transaction.objects.bulk_create(to_create)
                 created_ids = [tx.id for tx in created if tx.id]
                 added = len(created_ids)
 

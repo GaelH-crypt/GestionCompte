@@ -204,7 +204,7 @@ export default function DashboardPage() {
                     <div>
                       <p className="text-sm text-gray-200">{d.name}</p>
                       <p className="text-xs text-gray-500">
-                        {format(new Date(d.next_occurrence), 'd MMM yyyy', { locale: fr })}
+                        {d.next_occurrence ? format(new Date(d.next_occurrence), 'd MMM yyyy', { locale: fr }) : '–'}
                       </p>
                     </div>
                   </div>

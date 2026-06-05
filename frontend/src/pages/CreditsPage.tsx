@@ -12,7 +12,7 @@ import { fr } from 'date-fns/locale'
 import type { Credit, CreditType, RecurringTransaction } from '@/types'
 
 const formatEur = (n: number | string) =>
-  new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(parseFloat(String(n)))
+  new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(parseFloat(String(n)) || 0)
 
 function computeMonthlyBreakdown(credit: Credit) {
   if (!credit.remaining_capital || !credit.interest_rate || !credit.monthly_payment) {
@@ -211,7 +211,7 @@ export default function CreditsPage() {
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-400">Fin estimée</span>
                     <span className="text-white">
-                      {format(new Date(credit.estimated_end_date), 'MMM yyyy', { locale: fr })}
+                      {credit.estimated_end_date ? format(new Date(credit.estimated_end_date), 'MMM yyyy', { locale: fr }) : '–'}
                     </span>
                   </div>
                 )}

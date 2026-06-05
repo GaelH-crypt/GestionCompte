@@ -7,6 +7,9 @@ from .services import get_account_balance
 class AccountSerializer(serializers.ModelSerializer):
     current_balance = serializers.SerializerMethodField()
     linked_credit = serializers.PrimaryKeyRelatedField(
+        # Default to none() — any submitted PK will fail with "Invalid pk" which
+        # is the correct safe behaviour when no request context is available.
+        # The queryset is narrowed to the authenticated user's credits in __init__.
         queryset=Credit.objects.none(),
         allow_null=True,
         required=False,

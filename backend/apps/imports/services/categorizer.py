@@ -11,6 +11,8 @@ ex. 'TAXE FONCIERE' (Impôts) avant 'FONCIER' (Logement), 'ASSURANCE VIE'
 (Épargne) avant 'ASSURANCE' (Assurances).
 """
 
+import re
+
 RULES: list[tuple[list[str], str]] = [
     # Revenus
     # NB : pas de 'PAIE'/'PAYE' (matcherait 'PAIEMENT'), ni 'CAF' (matcherait 'CAFE').
@@ -78,6 +80,6 @@ def suggest_category(description: str) -> str | None:
     upper = description.upper()
     for keywords, category in RULES:
         for kw in keywords:
-            if kw in upper:
+            if re.search(r'\b' + re.escape(kw.strip()) + r'\b', upper):
                 return category
     return None

@@ -37,6 +37,9 @@ class Transaction(models.Model):
 
     class Meta:
         ordering = ['-date', '-created_at']
+        indexes = [
+            models.Index(fields=['account', 'date'], name='tx_account_date_idx'),
+        ]
         constraints = [
             models.UniqueConstraint(
                 condition=models.Q(external_id__isnull=False),

@@ -448,6 +448,70 @@ class ImportIgnoredAccountTest(TestCase):
         self.assertEqual(count_before, count_after)
         self.assertIn('ETALIS', resp.data.get('skipped_ribs', []))
 
+    def test_confirm_skips_invalid_transaction_type(self):
+        """ConfirmView: transactions with unknown transaction_type are skipped."""
+        from apps.transactions.models import Transaction
+
+        account = Account.objects.create(
+            user=self.user, name='Valid Account', account_type='checking',
+            initial_balance=0,
+        )
+        count_before = Transaction.objects.filter(user=self.user).count()
+
+        resp = self.client.post('/api/import/confirm/', {
+            'mapping': {
+                'VALID': {'create': False, 'id': account.id, 'name': 'Valid Account', 'account_type': 'checking'},
+            },
+            'transactions': {
+                'VALID': [
+                    {'date': '2026-05-01', 'description': 'Good tx', 'amount': '50.00',
+                     'transaction_type': 'expense', 'category_id': None},
+                    {'date': '2026-05-02', 'description': 'Bad tx', 'amount': '20.00',
+                     'transaction_type': 'unknown_type', 'category_id': None},
+                ],
+            },
+        }, format='json')
+
+        self.assertEqual(resp.status_code, 200)
+        count_after = Transaction.objects.filter(user=self.user).count()
+        self.assertEqual(count_after - count_before, 1)
+        self.assertEqual(resp.data['created_transactions'], 1)
+
+    def test_confirm_skips_malformed_date(self):
+        """ConfirmView: transactions with invalid date strings are skipped."""
+        from apps.transactions.models import Transaction
+
+        account = Account.objects.create(
+            user=self.user, name='Date Test Account', account_type='checking',
+            initial_balance=0,
+        )
+        count_before = Transaction.objects.filter(user=self.user).count()
+
+        resp = self.client.post('/api/import/confirm/', {
+            'mapping': {
+                'DATE_TEST': {'create': False, 'id': account.id, 'name': 'Date Test Account', 'account_type': 'checking'},
+            },
+            'transactions': {
+                'DATE_TEST': [
+                    {'date': '2026-05-01', 'description': 'Valid date tx', 'amount': '75.00',
+                     'transaction_type': 'income', 'category_id': None},
+                    {'date': 'not-a-date', 'description': 'Invalid date tx', 'amount': '30.00',
+                     'transaction_type': 'expense', 'category_id': None},
+                ],
+            },
+        }, format='json')
+
+        self.assertEqual(resp.status_code, 200)
+        count_after = Transaction.objects.filter(user=self.user).count()
+        self.assertEqual(count_after - count_before, 1)
+        self.assertEqual(resp.data['created_transactions'], 1)
+
+    # NOTE: Atomic rollback behaviour is covered by the db_transaction.atomic() block
+    # in ConfirmView. Unit-testing a mid-transaction DB failure would require injecting
+    # a database error (e.g. via mock or intentional constraint violation), which adds
+    # significant test infrastructure complexity for minimal coverage gain.
+    # The atomic() guarantee is already well-tested by Django itself.
+
     def test_preview_excludes_ignored_from_existing_accounts(self):
         """Ignored accounts must not appear in existing_accounts in preview response."""
         import io
