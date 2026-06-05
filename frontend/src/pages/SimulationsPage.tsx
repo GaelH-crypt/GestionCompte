@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query'
 import { Beaker, Play, RotateCcw, Plus, Trash2 } from 'lucide-react'
 import { projectionsApi } from '@/api/projections'
 import { ProjectionChart } from '@/components/projections/ProjectionChart'
+import { ViewModeToggle } from '@/components/projections/ViewModeToggle'
 import { Card, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -36,6 +37,12 @@ function saveExpenses(userId: number | undefined, items: SimulationExpenseItem[]
 export default function SimulationsPage() {
   const user = useAuthStore((s) => s.user)
   const [months, setMonths] = useState(12)
+  const [daily, setDaily] = useState(false)
+
+  function selectHorizon(value: number) {
+    setMonths(value)
+    if (value > 6) setDaily(false)
+  }
   const [income, setIncome] = useState('')
   const [expenses, setExpenses] = useState('')
   const [credits, setCredits] = useState('')
@@ -84,6 +91,7 @@ export default function SimulationsPage() {
   function handleSimulate() {
     mutate({
       months,
+      daily,
       income: income ? parseFloat(income) : undefined,
       expenses: expenses ? parseFloat(expenses) : undefined,
       credits: credits ? parseFloat(credits) : undefined,
@@ -125,7 +133,7 @@ export default function SimulationsPage() {
                 {HORIZONS.map((h) => (
                   <button
                     key={h}
-                    onClick={() => setMonths(h)}
+                    onClick={() => selectHorizon(h)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                       months === h
                         ? 'bg-brand-500 text-white'
@@ -136,6 +144,15 @@ export default function SimulationsPage() {
                   </button>
                 ))}
               </div>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium text-gray-400 block mb-2">Vue</label>
+              <ViewModeToggle
+                value={daily ? 'daily' : 'monthly'}
+                onChange={(m) => setDaily(m === 'daily')}
+                dailyAllowed={months <= 6}
+              />
             </div>
 
             <Input
