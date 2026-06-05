@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   Wallet, TrendingUp, TrendingDown, Heart,
@@ -9,6 +10,7 @@ import { projectionsApi } from '@/api/projections'
 import { StatCard } from '@/components/dashboard/StatCard'
 import { ExpensesChart } from '@/components/dashboard/ExpensesChart'
 import { EvolutionChart } from '@/components/dashboard/EvolutionChart'
+import { ViewModeToggle } from '@/components/projections/ViewModeToggle'
 import { Card, CardTitle } from '@/components/ui/Card'
 import { PageSpinner } from '@/components/ui/Spinner'
 import { format } from 'date-fns'
@@ -17,16 +19,39 @@ import { fr } from 'date-fns/locale'
 const formatEur = (n: number) =>
   new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(n)
 
+const HORIZONS = [
+  { label: '1 mois', value: 1 },
+  { label: '3 mois', value: 3 },
+  { label: '6 mois', value: 6 },
+  { label: '1 an', value: 12 },
+  { label: '5 ans', value: 60 },
+]
+
 export default function DashboardPage() {
   const { data: summary, isLoading: loadingSummary } = useQuery({
     queryKey: ['dashboard-summary'],
     queryFn: () => dashboardApi.summary().then((r) => r.data),
   })
 
+  const [months, setMonths] = useState(1)
+  const [daily, setDaily] = useState(true)
+
+  function selectHorizon(value: number) {
+    setMonths(value)
+    if (value > 6) setDaily(false)
+  }
+
   const { data: history } = useQuery({
-    queryKey: ['projections-daily-dashboard'],
-    queryFn: () => projectionsApi.project(1).then((r) => r.data),
+    // Préfixe conservé pour que l'invalidation de SettingsPage continue de matcher.
+    queryKey: ['projections-daily-dashboard', months, daily],
+    queryFn: () => projectionsApi.project(months, daily).then((r) => r.data),
   })
+
+  const horizonLabel =
+    HORIZONS.find((h) => h.value === months)?.label ?? `${months} mois`
+  const chartTitle = daily
+    ? `Évolution jour le jour (${horizonLabel})`
+    : `Évolution mensuelle (${horizonLabel})`
 
   if (loadingSummary || !summary) return <PageSpinner />
 
@@ -105,8 +130,30 @@ export default function DashboardPage() {
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          {history && <EvolutionChart data={history} />}
+        <div className="lg:col-span-2 space-y-3">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex gap-2 flex-wrap">
+              {HORIZONS.map((h) => (
+                <button
+                  key={h.value}
+                  onClick={() => selectHorizon(h.value)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                    months === h.value
+                      ? 'bg-brand-500 text-white'
+                      : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
+                  }`}
+                >
+                  {h.label}
+                </button>
+              ))}
+            </div>
+            <ViewModeToggle
+              value={daily ? 'daily' : 'monthly'}
+              onChange={(m) => setDaily(m === 'daily')}
+              dailyAllowed={months <= 6}
+            />
+          </div>
+          {history && <EvolutionChart data={history} title={chartTitle} />}
         </div>
         <ExpensesChart data={summary.expenses_by_category} />
       </div>

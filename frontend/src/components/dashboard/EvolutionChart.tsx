@@ -8,6 +8,7 @@ import type { ProjectionPoint } from '@/types'
 
 interface EvolutionChartProps {
   data: ProjectionPoint[]
+  title?: string
 }
 
 const tooltipStyle = {
@@ -26,7 +27,7 @@ function ChartTooltip({ active, payload, label }: TooltipProps<number, string>) 
   const point = payload[0].payload as ProjectionPoint
   return (
     <div style={tooltipStyle}>
-      <p style={{ color: '#9ca3af', marginBottom: '4px' }}>Jour : {label}</p>
+      <p style={{ color: '#9ca3af', marginBottom: '4px' }}>{label}</p>
       <p style={{ color: '#fff', fontWeight: 600 }}>Global : {formatEur(point.balance)}</p>
       {point.checking_balance != null && (
         <p style={{ color: '#10b981', fontWeight: 500 }}>
@@ -47,14 +48,16 @@ function ChartTooltip({ active, payload, label }: TooltipProps<number, string>) 
   )
 }
 
-export function EvolutionChart({ data }: EvolutionChartProps) {
+export function EvolutionChart({ data, title = 'Évolution sur les 30 prochains jours' }: EvolutionChartProps) {
   const minBalance = Math.min(...data.map((d) => d.balance))
   const isNegative = minBalance < 0
   const hasChecking = data.some((d) => d.checking_balance != null)
+  // Vise ~8 graduations quelle que soit la granularité (mensuelle ou quotidienne).
+  const tickInterval = Math.floor(data.length / 8)
 
   return (
     <Card>
-      <CardTitle>Évolution sur les 30 prochains jours</CardTitle>
+      <CardTitle>{title}</CardTitle>
       <ResponsiveContainer width="100%" height={260}>
         <AreaChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
           <defs>
@@ -68,7 +71,7 @@ export function EvolutionChart({ data }: EvolutionChartProps) {
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-          <XAxis dataKey="month" tick={{ fill: '#6b7280', fontSize: 11 }} interval={4} />
+          <XAxis dataKey="month" tick={{ fill: '#6b7280', fontSize: 11 }} interval={tickInterval} />
           <YAxis
             tick={{ fill: '#6b7280', fontSize: 11 }}
             tickFormatter={(v) => `${(v / 1000).toFixed(0)}k€`}

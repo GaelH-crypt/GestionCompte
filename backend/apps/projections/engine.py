@@ -1,3 +1,4 @@
+import calendar
 from decimal import Decimal
 from datetime import date, timedelta
 from dateutil.relativedelta import relativedelta
@@ -67,18 +68,17 @@ class ProjectionEngine:
         balance reflects intra-month fluctuations rather than a smoothed total."""
         if days <= 0:
             return []
-        days_d = Decimal(str(days))
 
-        # Override deltas: distribute (override - actual) evenly across days.
-        income_daily = (
-            self.overrides.get('income', self.monthly_income) - self.monthly_income
-        ) / days_d
+        # Monthly override deltas (override - actual monthly value). Applied per day
+        # at each day's calendar-month rate (delta / days_in_that_month) so that
+        # every month in the window receives the full monthly delta. This matters
+        # for multi-month horizons (3/6 mois): dividing by the whole day count would
+        # spread one month's delta across the entire window and understate it.
+        income_delta = self.overrides.get('income', self.monthly_income) - self.monthly_income
         expenses_delta = self.overrides.get('expenses', self.monthly_expenses) - self.monthly_expenses
         extra = self.overrides.get('extra_expenses', Decimal('0'))
-        expenses_daily = (expenses_delta + extra) / days_d
-        credits_daily = (
-            self.overrides.get('credits', self.monthly_credits) - self.monthly_credits
-        ) / days_d
+        expenses_extra_delta = expenses_delta + extra
+        credits_delta = self.overrides.get('credits', self.monthly_credits) - self.monthly_credits
 
         balance = self.current_balance
         today = date.today()
@@ -99,10 +99,11 @@ class ProjectionEngine:
         result = []
         for i in range(days):
             day = today + timedelta(days=i + 1)
+            month_len = Decimal(calendar.monthrange(day.year, day.month)[1])
             b = by_date.get(day)
-            income = (b['income'] if b else Decimal('0')) + income_daily
-            expenses = (b['expenses'] if b else Decimal('0')) + expenses_daily
-            credits = (b['credits'] if b else Decimal('0')) + credits_daily
+            income = (b['income'] if b else Decimal('0')) + income_delta / month_len
+            expenses = (b['expenses'] if b else Decimal('0')) + expenses_extra_delta / month_len
+            credits = (b['credits'] if b else Decimal('0')) + credits_delta / month_len
 
             net = income - expenses - credits
             balance += net
@@ -245,10 +246,9 @@ def build_engine_from_user(user, overrides: dict = None, cycle_start_day: int = 
     # already contributes to monthly_expenses (expense, monthly or weekly).
     uncovered, monthly_credits = _compute_uncovered_credits(user)
 
-    # Day-by-day cashflow events for the fine-grained (1-month) projection: place
-    # every recurrence and credit charge on its real date. ~2 months covers the
-    # longest "1 mois" window with margin.
-    daily_end = today + timedelta(days=62)
+    # Événements jour-le-jour (récurrences + échéances de crédit) placés sur leur
+    # date réelle. Couvre le plus long horizon jour-le-jour (6 mois) avec une marge.
+    daily_end = today + relativedelta(months=6) + timedelta(days=5)
 
     from apps.transactions.models import Transaction as _Tx
     from apps.preferences.cycle import get_cycle_start
@@ -343,7 +343,8 @@ def build_engine_for_account(user, account_id: int, overrides: dict = None, cycl
     uncovered, monthly_credits = _compute_uncovered_credits(user)
 
     # Daily events: recurring filtered by account_id + credit charges (uncovered)
-    daily_end = today + timedelta(days=62)
+    # Couvre le plus long horizon jour-le-jour (6 mois) avec une petite marge.
+    daily_end = today + relativedelta(months=6) + timedelta(days=5)
 
     from apps.transactions.models import Transaction as _Tx
     from apps.preferences.cycle import get_cycle_start
@@ -387,7 +388,6 @@ def build_engine_for_account(user, account_id: int, overrides: dict = None, cycl
 
 def _monthly_charge_dates(day_of_month: int, start: date, end: date) -> list:
     """Dates falling on `day_of_month` (clamped to month length) within (start, end]."""
-    import calendar
     dates = []
     cursor = date(start.year, start.month, 1)
     while cursor <= end:
