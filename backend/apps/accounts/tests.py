@@ -56,6 +56,36 @@ class AccountCreditFieldsTest(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
 
+class AccountIDORTest(TestCase):
+    """Cross-user IDOR: user_b must not access user_a's accounts."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user_a = User.objects.create_user('idor_user_a', password='pass')
+        self.user_b = User.objects.create_user('idor_user_b', password='pass')
+        self.account_a = Account.objects.create(
+            user=self.user_a, name='Account A', account_type='checking',
+            initial_balance=1000, color='#fff', icon='CreditCard'
+        )
+        self.client.force_authenticate(user=self.user_b)
+
+    def test_user_b_cannot_get_user_a_account(self):
+        resp = self.client.get(f'/api/accounts/{self.account_a.id}/')
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_user_b_cannot_patch_user_a_account(self):
+        resp = self.client.patch(
+            f'/api/accounts/{self.account_a.id}/',
+            {'name': 'Hacked'},
+            format='json'
+        )
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_user_b_cannot_delete_user_a_account(self):
+        resp = self.client.delete(f'/api/accounts/{self.account_a.id}/')
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+
 class AccountAPITest(TestCase):
     def setUp(self):
         self.client = APIClient()
