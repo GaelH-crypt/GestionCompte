@@ -241,7 +241,8 @@ def build_engine_from_user(user, overrides: dict = None, cycle_start_day: int = 
     # Day-by-day cashflow events for the fine-grained (1-month) projection: place
     # every recurrence and credit charge on its real date. ~2 months covers the
     # longest "1 mois" window with margin.
-    daily_end = today + timedelta(days=62)
+    # Couvre le plus long horizon jour-le-jour (6 mois) avec une petite marge.
+    daily_end = today + relativedelta(months=6) + timedelta(days=5)
 
     from apps.transactions.models import Transaction as _Tx
     from apps.preferences.cycle import get_cycle_start
@@ -336,7 +337,8 @@ def build_engine_for_account(user, account_id: int, overrides: dict = None, cycl
     uncovered, monthly_credits = _compute_uncovered_credits(user)
 
     # Daily events: recurring filtered by account_id + credit charges (uncovered)
-    daily_end = today + timedelta(days=62)
+    # Couvre le plus long horizon jour-le-jour (6 mois) avec une petite marge.
+    daily_end = today + relativedelta(months=6) + timedelta(days=5)
 
     from apps.transactions.models import Transaction as _Tx
     from apps.preferences.cycle import get_cycle_start

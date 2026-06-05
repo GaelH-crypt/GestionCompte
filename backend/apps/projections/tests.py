@@ -255,6 +255,24 @@ class BuildEngineFromUserTest(TestCase):
             "Nounou must not appear in current month via explicit link",
         )
 
+    def test_daily_events_span_six_months(self):
+        """Les récurrents mensuels doivent produire des occurrences au-delà de
+        62 jours pour alimenter la projection jour-le-jour jusqu'à 6 mois."""
+        from apps.recurring.models import RecurringTransaction
+        from apps.projections.engine import build_engine_from_user
+        today = date.today()
+        RecurringTransaction.objects.create(
+            user=self.user, account=self.account, name='Abonnement',
+            amount=Decimal('10.00'), transaction_type='expense',
+            frequency='monthly', next_occurrence=today + timedelta(days=10),
+        )
+        engine = build_engine_from_user(self.user)
+        abo = [e for e in engine.daily_events if e['amount'] == Decimal('10.00')]
+        self.assertTrue(
+            any(e['date'] > today + timedelta(days=120) for e in abo),
+            "Les récurrents mensuels doivent produire des occurrences au-delà de 4 mois",
+        )
+
 
 class BuildEngineForAccountTest(TestCase):
     def setUp(self):
