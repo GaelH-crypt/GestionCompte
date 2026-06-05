@@ -386,6 +386,8 @@ class ProjectionDailyHorizonTest(TestCase):
         today = date.today()
         expected_days = (today + relativedelta(months=3) - today).days
         self.assertEqual(len(resp.data), expected_days)
+        # Borne indépendante : 3 mois calendaires = 89–92 jours.
+        self.assertIn(len(resp.data), range(89, 93))
         self.assertIn('events', resp.data[0])
 
     def test_daily_ignored_for_long_horizon(self):
@@ -406,4 +408,6 @@ class ProjectionDailyHorizonTest(TestCase):
         today = date.today()
         expected_days = (today + relativedelta(months=3) - today).days
         self.assertEqual(len(resp.data), expected_days)
+        # Borne indépendante : 3 mois calendaires = 89–92 jours.
+        self.assertIn(len(resp.data), range(89, 93))
         self.assertIn('baseline_balance', resp.data[0])

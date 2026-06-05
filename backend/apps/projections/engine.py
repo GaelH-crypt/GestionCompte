@@ -238,10 +238,8 @@ def build_engine_from_user(user, overrides: dict = None, cycle_start_day: int = 
     # already contributes to monthly_expenses (expense, monthly or weekly).
     uncovered, monthly_credits = _compute_uncovered_credits(user)
 
-    # Day-by-day cashflow events for the fine-grained (1-month) projection: place
-    # every recurrence and credit charge on its real date. ~2 months covers the
-    # longest "1 mois" window with margin.
-    # Couvre le plus long horizon jour-le-jour (6 mois) avec une petite marge.
+    # Événements jour-le-jour (récurrences + échéances de crédit) placés sur leur
+    # date réelle. Couvre le plus long horizon jour-le-jour (6 mois) avec une marge.
     daily_end = today + relativedelta(months=6) + timedelta(days=5)
 
     from apps.transactions.models import Transaction as _Tx

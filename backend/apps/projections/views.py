@@ -16,6 +16,7 @@ DAILY_HORIZONS = {1, 3, 6}
 
 
 def _parse_bool(value) -> bool:
+    """True for truthy query/body values; None or anything else → False."""
     return str(value).lower() in ('1', 'true', 'yes', 'on')
 
 
