@@ -116,8 +116,9 @@ class ProjectionEngineTest(TestCase):
         self.assertAlmostEqual(result[0]['balance'], 1800.0, places=1)
 
     def test_daily_projection_applies_income_override(self):
+        import calendar
         from apps.projections.engine import ProjectionEngine
-        # monthly_income = 0, override income = 600 → delta = 600/2 = 300/day
+        # Override deltas spread at each day's calendar-month rate (delta / days_in_month).
         engine = ProjectionEngine(
             current_balance=Decimal('1000'),
             monthly_income=Decimal('0'),
@@ -127,12 +128,16 @@ class ProjectionEngineTest(TestCase):
             overrides={'income': Decimal('600')},
         )
         result = engine.project_daily(days=2)
-        self.assertAlmostEqual(result[0]['balance'], 1300.0, places=1)
-        self.assertAlmostEqual(result[1]['balance'], 1600.0, places=1)
+        today = date.today()
+        d1, d2 = today + timedelta(days=1), today + timedelta(days=2)
+        r1 = 600 / calendar.monthrange(d1.year, d1.month)[1]
+        r2 = 600 / calendar.monthrange(d2.year, d2.month)[1]
+        self.assertAlmostEqual(result[0]['balance'], 1000 + r1, places=1)
+        self.assertAlmostEqual(result[1]['balance'], 1000 + r1 + r2, places=1)
 
     def test_daily_projection_applies_extra_expenses_override(self):
+        import calendar
         from apps.projections.engine import ProjectionEngine
-        # extra_expenses = 60 → 60/2 = 30/day additional expense
         engine = ProjectionEngine(
             current_balance=Decimal('1000'),
             monthly_income=Decimal('0'),
@@ -142,12 +147,16 @@ class ProjectionEngineTest(TestCase):
             overrides={'extra_expenses': Decimal('60')},
         )
         result = engine.project_daily(days=2)
-        self.assertAlmostEqual(result[0]['balance'], 970.0, places=1)
-        self.assertAlmostEqual(result[1]['balance'], 940.0, places=1)
+        today = date.today()
+        d1, d2 = today + timedelta(days=1), today + timedelta(days=2)
+        r1 = 60 / calendar.monthrange(d1.year, d1.month)[1]
+        r2 = 60 / calendar.monthrange(d2.year, d2.month)[1]
+        self.assertAlmostEqual(result[0]['balance'], 1000 - r1, places=1)
+        self.assertAlmostEqual(result[1]['balance'], 1000 - r1 - r2, places=1)
 
     def test_daily_projection_applies_expenses_override(self):
+        import calendar
         from apps.projections.engine import ProjectionEngine
-        # monthly_expenses = 0, override expenses = 100 → delta = 100/2 = 50/day
         engine = ProjectionEngine(
             current_balance=Decimal('1000'),
             monthly_income=Decimal('0'),
@@ -157,8 +166,30 @@ class ProjectionEngineTest(TestCase):
             overrides={'expenses': Decimal('100')},
         )
         result = engine.project_daily(days=2)
-        self.assertAlmostEqual(result[0]['balance'], 950.0, places=1)
-        self.assertAlmostEqual(result[1]['balance'], 900.0, places=1)
+        today = date.today()
+        d1, d2 = today + timedelta(days=1), today + timedelta(days=2)
+        r1 = 100 / calendar.monthrange(d1.year, d1.month)[1]
+        r2 = 100 / calendar.monthrange(d2.year, d2.month)[1]
+        self.assertAlmostEqual(result[0]['balance'], 1000 - r1, places=1)
+        self.assertAlmostEqual(result[1]['balance'], 1000 - r1 - r2, places=1)
+
+    def test_daily_projection_override_applied_each_month(self):
+        """A monthly override must repeat every month across a multi-month window,
+        not be smeared once over the whole period (regression for 3/6-month daily)."""
+        from apps.projections.engine import ProjectionEngine
+        engine = ProjectionEngine(
+            current_balance=Decimal('0'),
+            monthly_income=Decimal('0'),
+            monthly_expenses=Decimal('0'),
+            monthly_credits=Decimal('0'),
+            daily_events=[],
+            overrides={'income': Decimal('600')},
+        )
+        today = date.today()
+        days = (today + relativedelta(months=3) - today).days
+        result = engine.project_daily(days)
+        # ~3 monthly applications of +600 across the window (small partial-month rounding).
+        self.assertAlmostEqual(result[-1]['balance'], 1800.0, delta=40.0)
 
 
 class BuildEngineFromUserTest(TestCase):
