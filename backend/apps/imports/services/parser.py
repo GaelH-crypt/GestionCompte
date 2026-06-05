@@ -215,8 +215,7 @@ def _is_confident(col_map: dict) -> bool:
 
 
 def _parse_generic_sheet(xl: pd.ExcelFile, sheet_name: str, col_map: dict) -> list[dict]:
-    raw = xl.parse(sheet_name, header=None)
-    raw = raw.head(10000)
+    raw = xl.parse(sheet_name, header=None, nrows=10000)
     transactions = []
     for _, row in raw.iterrows():
         row_list = row.tolist()
@@ -276,8 +275,7 @@ def _parse_generic_excel(xl: pd.ExcelFile, column_hints: dict | None = None) -> 
     hints_matched_sheet = False
 
     for sheet_name in xl.sheet_names:
-        raw = xl.parse(sheet_name, header=None)
-        raw = raw.head(10000)
+        raw = xl.parse(sheet_name, header=None, nrows=10000)
         if raw.empty or len(raw) < 2:
             continue
 
@@ -310,7 +308,7 @@ def _parse_generic_excel(xl: pd.ExcelFile, column_hints: dict | None = None) -> 
         # Either no hints or hints didn't match any sheet — ask for manual mapping
         sheets_meta = []
         for sheet_name in xl.sheet_names:
-            raw = xl.parse(sheet_name, header=None)
+            raw = xl.parse(sheet_name, header=None, nrows=10000)
             if raw.empty or len(raw) < 2:
                 continue
             header_idx = _detect_header_row(raw) or 0
