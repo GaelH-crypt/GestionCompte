@@ -367,3 +367,33 @@ class SimulationViewValidationTest(TestCase):
     def test_simulation_accepts_valid_months(self):
         resp = self.client.post('/api/projections/simulate/', {'months': 3}, format='json')
         self.assertEqual(resp.status_code, 200)
+
+
+class ProjectionDailyHorizonTest(TestCase):
+    def setUp(self):
+        from rest_framework.test import APIClient
+        from apps.accounts.models import Account
+        self.user = User.objects.create_user('dailyuser', password='p')
+        Account.objects.create(
+            user=self.user, name='CC', account_type='checking', initial_balance=1000,
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+    def test_daily_true_returns_one_point_per_day(self):
+        resp = self.client.get('/api/projections/?months=3&daily=true')
+        self.assertEqual(resp.status_code, 200)
+        today = date.today()
+        expected_days = (today + relativedelta(months=3) - today).days
+        self.assertEqual(len(resp.data), expected_days)
+        self.assertIn('events', resp.data[0])
+
+    def test_daily_ignored_for_long_horizon(self):
+        resp = self.client.get('/api/projections/?months=12&daily=true')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.data), 12)
+
+    def test_monthly_by_default(self):
+        resp = self.client.get('/api/projections/?months=3')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.data), 3)

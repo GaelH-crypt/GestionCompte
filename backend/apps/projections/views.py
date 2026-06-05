@@ -11,6 +11,22 @@ from .engine import build_engine_from_user, build_engine_for_account
 
 VALID_HORIZONS = {1, 3, 6, 12, 60}
 
+# Horizons pour lesquels la vue jour-le-jour est autorisée.
+DAILY_HORIZONS = {1, 3, 6}
+
+
+def _parse_bool(value) -> bool:
+    return str(value).lower() in ('1', 'true', 'yes', 'on')
+
+
+def _run_projection(engine, months: int, daily: bool) -> list:
+    """Lance la projection mensuelle ou jour-le-jour selon `daily`."""
+    if daily:
+        today = date.today()
+        days = (today + relativedelta(months=months) - today).days
+        return engine.project_daily(days)
+    return engine.project(months)
+
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -35,23 +51,11 @@ def projection_view(request):
             request.user, pref.primary_account_id, cycle_start_day=cycle_start_day
         )
 
-    if months == 1:
-        today = date.today()
-        days = (today + relativedelta(months=1) - today).days
-        result = engine.project_daily(days)
-        if checking_engine:
-            checking_result = checking_engine.project_daily(days)
-            result[0]['checking_start_balance'] = float(checking_engine.current_balance)
-            for row, crow in zip(result, checking_result):
-                row['checking_balance'] = crow['balance']
-        else:
-            for row in result:
-                row['checking_balance'] = None
-        return Response(result)
+    daily = _parse_bool(request.query_params.get('daily')) and months in DAILY_HORIZONS
 
-    result = engine.project(months)
+    result = _run_projection(engine, months, daily)
     if checking_engine:
-        checking_result = checking_engine.project(months)
+        checking_result = _run_projection(checking_engine, months, daily)
         result[0]['checking_start_balance'] = float(checking_engine.current_balance)
         for row, crow in zip(result, checking_result):
             row['checking_balance'] = crow['balance']
