@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react'
 import { projectionsApi } from '@/api/projections'
 import { ProjectionChart } from '@/components/projections/ProjectionChart'
+import { ViewModeToggle } from '@/components/projections/ViewModeToggle'
 import { Card, CardTitle } from '@/components/ui/Card'
 import { PageSpinner } from '@/components/ui/Spinner'
 
@@ -20,15 +21,21 @@ const HORIZONS = [
 
 export default function ProjectionsPage() {
   const [months, setMonths] = useState(12)
+  const [daily, setDaily] = useState(false)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['projections', months],
-    queryFn: () => projectionsApi.project(months).then((r) => r.data),
+    queryKey: ['projections', months, daily],
+    queryFn: () => projectionsApi.project(months, daily).then((r) => r.data),
   })
+
+  function selectHorizon(value: number) {
+    setMonths(value)
+    if (value > 6) setDaily(false)
+  }
 
   if (isLoading || !data) return <PageSpinner />
 
-  const isDaily = months === 1
+  const isDaily = daily
   const first = data[0]
   const last = data[data.length - 1]
   const startBalance = first.balance - first.net
@@ -43,21 +50,28 @@ export default function ProjectionsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Horizon selector */}
-      <div className="flex gap-2 flex-wrap">
-        {HORIZONS.map((h) => (
-          <button
-            key={h.value}
-            onClick={() => setMonths(h.value)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              months === h.value
-                ? 'bg-brand-500 text-white'
-                : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
-            }`}
-          >
-            {h.label}
-          </button>
-        ))}
+      {/* Horizon selector + view mode */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex gap-2 flex-wrap">
+          {HORIZONS.map((h) => (
+            <button
+              key={h.value}
+              onClick={() => selectHorizon(h.value)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                months === h.value
+                  ? 'bg-brand-500 text-white'
+                  : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'
+              }`}
+            >
+              {h.label}
+            </button>
+          ))}
+        </div>
+        <ViewModeToggle
+          value={daily ? 'daily' : 'monthly'}
+          onChange={(m) => setDaily(m === 'daily')}
+          dailyAllowed={months <= 6}
+        />
       </div>
 
       {/* Invite si pas de compte courant configuré */}
