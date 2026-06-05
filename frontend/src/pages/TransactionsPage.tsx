@@ -313,7 +313,7 @@ export default function TransactionsPage() {
                 {tx.account_name}{tx.category_name ? ` · ${tx.category_name}` : ''}
               </span>
               <span className="text-xs text-gray-500 whitespace-nowrap ml-2">
-                {format(new Date(tx.date), 'd MMM yyyy', { locale: fr })}
+                {tx.date ? format(new Date(tx.date), 'd MMM yyyy', { locale: fr }) : '–'}
               </span>
             </div>
             {tx.recurring_transaction_name && (
