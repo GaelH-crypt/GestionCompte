@@ -1,5 +1,4 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
 import type { User } from '@/types'
 
 interface AuthState {
@@ -12,17 +11,12 @@ interface AuthState {
   isAuthenticated: () => boolean
 }
 
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set, get) => ({
-      user: null,
-      accessToken: null,
-      refreshToken: null,
-      setTokens: (access, refresh) => set({ accessToken: access, refreshToken: refresh }),
-      setUser: (user) => set({ user }),
-      logout: () => set({ user: null, accessToken: null, refreshToken: null }),
-      isAuthenticated: () => !!get().accessToken,
-    }),
-    { name: 'gestion-auth' }
-  )
-)
+export const useAuthStore = create<AuthState>()((set, get) => ({
+  user: null,
+  accessToken: null,
+  refreshToken: null,
+  setTokens: (access, refresh) => set({ accessToken: access, refreshToken: refresh }),
+  setUser: (user) => set({ user }),
+  logout: () => set({ user: null, accessToken: null, refreshToken: null }),
+  isAuthenticated: () => !!get().accessToken,
+}))
