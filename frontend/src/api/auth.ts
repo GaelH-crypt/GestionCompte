@@ -1,5 +1,8 @@
+import axios from 'axios'
 import client from './client'
 import type { User } from '@/types'
+
+const BASE_URL = '/api'
 
 export const authApi = {
   login: (username: string, password: string) =>
@@ -9,5 +12,5 @@ export const authApi = {
   me: () =>
     client.get<User>('/auth/me/'),
   refresh: (refresh: string) =>
-    client.post<{ access: string }>('/auth/refresh/', { refresh }),
+    axios.post<{ access: string }>(`${BASE_URL}/auth/refresh/`, { refresh }),
 }

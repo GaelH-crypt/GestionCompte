@@ -39,6 +39,34 @@ class TransactionAPITest(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
 
+class TransactionIDORTest(TestCase):
+    """Cross-user IDOR: user_b must not access user_a's transactions."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user_a = User.objects.create_user('tx_idor_user_a', password='pass')
+        self.user_b = User.objects.create_user('tx_idor_user_b', password='pass')
+        self.account_a = Account.objects.create(
+            user=self.user_a, name='Account A', account_type='checking',
+            initial_balance=1000, color='#fff', icon='CreditCard'
+        )
+        from apps.transactions.models import Transaction
+        self.tx_a = Transaction.objects.create(
+            user=self.user_a, account=self.account_a,
+            transaction_type='expense', amount='50.00',
+            description='Private expense', date='2026-05-01'
+        )
+        self.client.force_authenticate(user=self.user_b)
+
+    def test_user_b_cannot_get_user_a_transaction(self):
+        resp = self.client.get(f'/api/transactions/{self.tx_a.id}/')
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_user_b_cannot_delete_user_a_transaction(self):
+        resp = self.client.delete(f'/api/transactions/{self.tx_a.id}/')
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
+
 from datetime import date as dt
 from apps.transactions.detection import detect_recurring_suggestions
 

@@ -6,6 +6,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
+from django.db import transaction as db_transaction
 
 from apps.imports.services.parser import parse_excel, ParseError, ColumnMappingRequired
 from apps.imports.services.categorizer import suggest_category
@@ -140,64 +141,72 @@ class ConfirmView(APIView):
                     return v
             return {}
 
-        for rib, txs in transactions_payload.items():
-            account_config = _find_config(rib)
-            account_id = account_config.get('id')
-            if not account_id:
-                skipped_ribs.append(rib)
-                continue
+        with db_transaction.atomic():
+            for rib, txs in transactions_payload.items():
+                account_config = _find_config(rib)
+                account_id = account_config.get('id')
+                if not account_id:
+                    skipped_ribs.append(rib)
+                    continue
 
-            try:
-                account = Account.objects.get(id=account_id, user=request.user)
-            except Account.DoesNotExist:
-                return Response(
-                    {'error': f'Compte {account_id} introuvable ou inaccessible.'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            if account.is_import_ignored:
-                skipped_ribs.append(rib)
-                continue
-
-            # Normalize existing transactions to (date_string, Decimal, str) for comparison
-            existing_txs = set()
-            for date_val, amount_val, desc in Transaction.objects.filter(account=account).values_list(
-                'date', 'amount', 'description'
-            ):
-                if isinstance(date_val, datetime.date):
-                    date_str = date_val.strftime('%Y-%m-%d')
-                else:
-                    date_str = str(date_val)
-                existing_txs.add((date_str, Decimal(str(amount_val)).quantize(Decimal('0.01')), desc))
-
-            for tx in txs:
                 try:
-                    amount = Decimal(str(tx['amount'])).quantize(Decimal('0.01'))
-                except Exception:
-                    continue
-                date_str = str(tx['date'])
-                desc = tx['description'][:255]
-                key = (date_str, amount, desc)
-                if key in existing_txs:
+                    account = Account.objects.get(id=account_id, user=request.user)
+                except Account.DoesNotExist:
+                    return Response(
+                        {'error': f'Compte {account_id} introuvable ou inaccessible.'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                if account.is_import_ignored:
+                    skipped_ribs.append(rib)
                     continue
 
-                category = categories_by_id.get(tx.get('category_id'))
+                # Normalize existing transactions to (date_string, Decimal, str) for comparison
+                existing_txs = set()
+                for date_val, amount_val, desc in Transaction.objects.filter(account=account).values_list(
+                    'date', 'amount', 'description'
+                ):
+                    if isinstance(date_val, datetime.date):
+                        date_str = date_val.strftime('%Y-%m-%d')
+                    else:
+                        date_str = str(date_val)
+                    existing_txs.add((date_str, Decimal(str(amount_val)).quantize(Decimal('0.01')), desc))
 
-                new_tx = Transaction.objects.create(
-                    user=request.user,
-                    account=account,
-                    transaction_type=tx['transaction_type'],
-                    amount=amount,
-                    description=desc,
-                    date=tx['date'],
-                    category=category,
-                    is_recurring=bool(tx.get('is_recurring', False)),
-                    note='',
-                    tags=[],
-                )
-                if category is None:
-                    created_ids.append(new_tx.id)
-                created_transactions += 1
+                VALID_TYPES = {'expense', 'income', 'transfer'}
+                for tx in txs:
+                    if tx.get('transaction_type') not in VALID_TYPES:
+                        continue
+                    try:
+                        date_obj = datetime.date.fromisoformat(str(tx.get('date', '')))
+                    except ValueError:
+                        continue
+                    try:
+                        amount = Decimal(str(tx['amount'])).quantize(Decimal('0.01'))
+                    except Exception:
+                        continue
+                    date_str = date_obj.strftime('%Y-%m-%d')
+                    desc = tx['description'][:255]
+                    key = (date_str, amount, desc)
+                    if key in existing_txs:
+                        continue
+
+                    category = categories_by_id.get(tx.get('category_id'))
+
+                    new_tx = Transaction.objects.create(
+                        user=request.user,
+                        account=account,
+                        transaction_type=tx['transaction_type'],
+                        amount=amount,
+                        description=desc,
+                        date=date_obj,
+                        category=category,
+                        is_recurring=bool(tx.get('is_recurring', False)),
+                        note='',
+                        tags=[],
+                    )
+                    if category is None:
+                        created_ids.append(new_tx.id)
+                    created_transactions += 1
 
         if created_ids:
             try:

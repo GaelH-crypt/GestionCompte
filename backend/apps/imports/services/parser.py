@@ -66,7 +66,7 @@ def _parse_account_sheet(xl: pd.ExcelFile, sheet_name: str) -> tuple[str, list[d
             if len(parts) >= 2:
                 rib = parts[-1].strip()
 
-    df = xl.parse(sheet_name, header=3)
+    df = xl.parse(sheet_name, header=3, nrows=10000)
     if df.shape[1] < 5:
         return rib, []
     df = df.iloc[:, :7]
@@ -214,7 +214,7 @@ def _is_confident(col_map: dict) -> bool:
 
 
 def _parse_generic_sheet(xl: pd.ExcelFile, sheet_name: str, col_map: dict) -> list[dict]:
-    raw = xl.parse(sheet_name, header=None)
+    raw = xl.parse(sheet_name, header=None, nrows=10000)
     transactions = []
     for _, row in raw.iterrows():
         row_list = row.tolist()
@@ -274,7 +274,7 @@ def _parse_generic_excel(xl: pd.ExcelFile, column_hints: dict | None = None) -> 
     hints_matched_sheet = False
 
     for sheet_name in xl.sheet_names:
-        raw = xl.parse(sheet_name, header=None)
+        raw = xl.parse(sheet_name, header=None, nrows=10000)
         if raw.empty or len(raw) < 2:
             continue
 
@@ -307,7 +307,7 @@ def _parse_generic_excel(xl: pd.ExcelFile, column_hints: dict | None = None) -> 
         # Either no hints or hints didn't match any sheet — ask for manual mapping
         sheets_meta = []
         for sheet_name in xl.sheet_names:
-            raw = xl.parse(sheet_name, header=None)
+            raw = xl.parse(sheet_name, header=None, nrows=10000)
             if raw.empty or len(raw) < 2:
                 continue
             header_idx = _detect_header_row(raw) or 0
@@ -325,12 +325,22 @@ def _parse_generic_excel(xl: pd.ExcelFile, column_hints: dict | None = None) -> 
 # ── Entry point ─────────────────────────────────────────────────────────────
 
 def parse_excel(file, column_hints: dict | None = None) -> dict:
+    _MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
     if isinstance(file, bytes):
+        if len(file) > _MAX_FILE_SIZE:
+            raise ValueError("File too large (max 10MB)")
         buf = io.BytesIO(file)
     else:
+        file.seek(0, 2)
+        size = file.tell()
+        file.seek(0)
+        if size > _MAX_FILE_SIZE:
+            raise ValueError("File too large (max 10MB)")
         buf = file
 
     xl = pd.ExcelFile(buf, engine='openpyxl')
+    if len(xl.sheet_names) > 20:
+        raise ValueError("Too many sheets (max 20)")
 
     if 'Vos comptes' in xl.sheet_names and any(s.startswith('Cpt ') for s in xl.sheet_names):
         try:

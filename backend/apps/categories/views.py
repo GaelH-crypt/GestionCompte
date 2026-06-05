@@ -14,7 +14,16 @@ class CategoryViewSet(viewsets.ModelViewSet):
     serializer_class = CategorySerializer
 
     def get_queryset(self):
-        return Category.objects.filter(user=self.request.user, parent=None).prefetch_related('subcategories')
+        return Category.objects.filter(user=self.request.user)
+
+    def list(self, request, *args, **kwargs):
+        qs = self.get_queryset().filter(parent=None).prefetch_related('subcategories')
+        page = self.paginate_queryset(qs)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        serializer = self.get_serializer(qs, many=True)
+        return Response(serializer.data)
 
 
 class CategoryRuleViewSet(viewsets.ModelViewSet):
