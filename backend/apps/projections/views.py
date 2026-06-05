@@ -102,14 +102,9 @@ def simulation_view(request):
     engine = build_engine_from_user(request.user, overrides=overrides, cycle_start_day=cycle_start_day)
     baseline_engine = build_engine_from_user(request.user, cycle_start_day=cycle_start_day)
 
-    if months == 1:
-        today = date.today()
-        days = (today + relativedelta(months=1) - today).days
-        result = engine.project_daily(days)
-        baseline = baseline_engine.project_daily(days)
-    else:
-        result = engine.project(months)
-        baseline = baseline_engine.project(months)
+    daily = _parse_bool(request.data.get('daily')) and months in DAILY_HORIZONS
+    result = _run_projection(engine, months, daily)
+    baseline = _run_projection(baseline_engine, months, daily)
 
     for i, row in enumerate(result):
         row['baseline_balance'] = baseline[i]['balance']

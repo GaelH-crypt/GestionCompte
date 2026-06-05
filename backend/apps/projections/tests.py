@@ -397,3 +397,13 @@ class ProjectionDailyHorizonTest(TestCase):
         resp = self.client.get('/api/projections/?months=3')
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(len(resp.data), 3)
+
+    def test_simulation_daily_true_returns_daily_points(self):
+        resp = self.client.post(
+            '/api/projections/simulate/', {'months': 3, 'daily': True}, format='json'
+        )
+        self.assertEqual(resp.status_code, 200)
+        today = date.today()
+        expected_days = (today + relativedelta(months=3) - today).days
+        self.assertEqual(len(resp.data), expected_days)
+        self.assertIn('baseline_balance', resp.data[0])
