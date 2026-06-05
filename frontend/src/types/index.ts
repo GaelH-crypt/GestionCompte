@@ -228,6 +228,7 @@ export interface SimulationParams {
   expenses?: number
   credits?: number
   extra_expenses?: Pick<SimulationExpenseItem, 'label' | 'amount'>[]
+  daily?: boolean
 }
 
 // ─── Preferences ───────────────────────────────────────────────────────────
