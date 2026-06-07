@@ -19,6 +19,7 @@ class Account(models.Model):
     icon = models.CharField(max_length=50, default='CreditCard')
     is_active = models.BooleanField(default=True)
     is_import_ignored = models.BooleanField(default=False)
+    exclude_from_total = models.BooleanField(default=False)
     linked_credit = models.ForeignKey(
         'credits.Credit',
         null=True,

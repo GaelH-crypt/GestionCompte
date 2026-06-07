@@ -52,7 +52,7 @@ export function expandOccurrences(
 
 /**
  * Expands active credits into monthly payment occurrences within the window.
- * Uses the credit's start_date day-of-month as the recurring payment day.
+ * Uses the credit's payment_day if set, else its start_date day-of-month.
  */
 export function expandCreditOccurrences(credits: Credit[], months: number): CreditEntry[] {
   const today = startOfDay(new Date())
@@ -66,8 +66,8 @@ export function expandCreditOccurrences(credits: Credit[], months: number): Cred
     if (!credit.is_active) continue
     if (!credit.start_date) continue
 
-    const parts = credit.start_date.split('-')
-    const preferredDay = parseInt(parts[2], 10)
+    const preferredDay =
+      credit.payment_day ?? parseInt(credit.start_date.split('-')[2], 10)
     if (isNaN(preferredDay)) continue
 
     const creditEndStr = credit.end_date || credit.estimated_end_date

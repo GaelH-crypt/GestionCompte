@@ -4,14 +4,13 @@ import { Plus, RefreshCw, Pencil, Trash2 } from 'lucide-react'
 import { recurringApi } from '@/api/recurring'
 import { accountsApi } from '@/api/accounts'
 import { categoriesApi } from '@/api/categories'
-import { creditsApi } from '@/api/credits'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { PageSpinner } from '@/components/ui/Spinner'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import type { Frequency, RecurringTransaction, Credit } from '@/types'
+import type { Frequency, RecurringTransaction } from '@/types'
 import { renderCategoryOptions } from '@/utils/categoryOptions'
 
 const formatEur = (n: number | string) =>
@@ -33,12 +32,6 @@ export default function RecurringPage() {
     queryFn: () => recurringApi.list().then((r) => r.data.results),
   })
 
-  const { data: creditsData } = useQuery({
-    queryKey: ['credits'],
-    queryFn: () => creditsApi.list().then((r) => r.data.results),
-  })
-  const credits = creditsData ?? []
-
   const deleteMut = useMutation({
     mutationFn: recurringApi.delete,
     onSuccess: () => {
@@ -52,8 +45,10 @@ export default function RecurringPage() {
   if (isLoading) return <PageSpinner />
 
   const items = data ?? []
-  const expenses = items.filter((r) => r.transaction_type === 'expense')
-  const incomes = items.filter((r) => r.transaction_type === 'income')
+  // Les totaux ne comptent que les éléments actifs (les récurrences liées à un
+  // crédit sont désactivées : le crédit est la source unique de sa mensualité).
+  const expenses = items.filter((r) => r.transaction_type === 'expense' && r.is_active)
+  const incomes = items.filter((r) => r.transaction_type === 'income' && r.is_active)
   const totalExpenses = expenses.reduce((s, r) => s + parseFloat(r.amount), 0)
   const totalIncomes = incomes.reduce((s, r) => s + parseFloat(r.amount), 0)
 
@@ -172,7 +167,6 @@ export default function RecurringPage() {
       {showForm && (
         <RecurringFormModal
           item={editing}
-          credits={credits}
           onClose={() => setShowForm(false)}
           onSaved={() => {
             setShowForm(false)
@@ -189,12 +183,11 @@ export default function RecurringPage() {
 
 interface RecurringFormModalProps {
   item: RecurringTransaction | null
-  credits: Credit[]
   onClose: () => void
   onSaved: () => void
 }
 
-function RecurringFormModal({ item, credits, onClose, onSaved }: RecurringFormModalProps) {
+function RecurringFormModal({ item, onClose, onSaved }: RecurringFormModalProps) {
   const [name, setName] = useState(item?.name ?? '')
   const [amount, setAmount] = useState(item?.amount ?? '')
   const [type, setType] = useState<'income' | 'expense'>(item?.transaction_type ?? 'expense')
@@ -204,7 +197,6 @@ function RecurringFormModal({ item, credits, onClose, onSaved }: RecurringFormMo
   const [categoryId, setCategoryId] = useState<string>(item?.category ? String(item.category) : '')
   const [note, setNote] = useState(item?.note ?? '')
   const [isActive, setIsActive] = useState(item?.is_active ?? true)
-  const [creditId, setCreditId] = useState<string>(item?.credit ? String(item.credit) : '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -239,7 +231,6 @@ function RecurringFormModal({ item, credits, onClose, onSaved }: RecurringFormMo
         next_occurrence: nextOccurrence,
         account: parseInt(accountId),
         category: categoryId ? parseInt(categoryId) : null,
-        credit: creditId ? parseInt(creditId) : null,
         note,
         is_active: isActive,
       }
@@ -345,16 +336,6 @@ function RecurringFormModal({ item, credits, onClose, onSaved }: RecurringFormMo
               className={`${sel} resize-none`}
               placeholder="Remarques…"
             />
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <label className="text-sm font-medium text-gray-400">Lié à un prêt (optionnel)</label>
-            <select value={creditId} onChange={(e) => setCreditId(e.target.value)} className={sel}>
-              <option value="">Aucun</option>
-              {credits.filter((c) => c.is_active).map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
           </div>
 
           <label className="flex items-center gap-2 cursor-pointer select-none">

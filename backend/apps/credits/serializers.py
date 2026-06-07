@@ -27,8 +27,8 @@ class CreditSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'name', 'credit_type', 'initial_capital', 'remaining_capital',
             'interest_rate', 'monthly_payment', 'insurance_monthly', 'duration_months',
-            'start_date', 'end_date', 'max_amount', 'early_repayment_possible',
-            'notes', 'is_active',
+            'start_date', 'end_date', 'max_amount', 'payment_day', 'payment_account',
+            'early_repayment_possible', 'notes', 'is_active',
             'total_cost', 'total_interest', 'remaining_months', 'estimated_end_date',
             'total_monthly_charge', 'draws', 'available_capacity', 'linked_accounts',
             'created_at',

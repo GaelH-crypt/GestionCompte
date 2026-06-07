@@ -388,6 +388,7 @@ function CreditFormModal({ credit, onClose, onSaved }: CreditFormModalProps) {
   const [durationMonths, setDurationMonths] = useState(credit?.duration_months != null ? String(credit.duration_months) : '')
   const [startDate, setStartDate] = useState(credit?.start_date ?? '')
   const [endDate, setEndDate] = useState(credit?.end_date ?? '')
+  const [paymentDay, setPaymentDay] = useState(credit?.payment_day != null ? String(credit.payment_day) : '')
   const [earlyRepayment, setEarlyRepayment] = useState(credit?.early_repayment_possible ?? true)
   const [isActive, setIsActive] = useState(credit?.is_active ?? true)
   const [notes, setNotes] = useState(credit?.notes ?? '')
@@ -411,6 +412,7 @@ function CreditFormModal({ credit, onClose, onSaved }: CreditFormModalProps) {
         duration_months: creditType !== 'revolving' ? Number(durationMonths) : undefined,
         start_date: startDate,
         end_date: endDate || null,
+        payment_day: paymentDay ? Number(paymentDay) : null,
         early_repayment_possible: earlyRepayment,
         is_active: isActive,
         notes,
@@ -549,6 +551,16 @@ function CreditFormModal({ credit, onClose, onSaved }: CreditFormModalProps) {
               onChange={(e) => setEndDate(e.target.value)}
             />
           </div>
+
+          <Input
+            label="Jour de prélèvement (optionnel)"
+            type="number"
+            min="1"
+            max="31"
+            value={paymentDay}
+            onChange={(e) => setPaymentDay(e.target.value)}
+            placeholder="Par défaut : jour de la date de début"
+          />
 
           <div className="flex gap-6">
             <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">

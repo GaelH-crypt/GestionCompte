@@ -130,28 +130,26 @@ _FREQ_STEP = {
 }
 
 
-def _compute_uncovered_credits(user):
-    """Return (uncovered queryset, monthly_credits Decimal) for a user."""
+def _compute_credits_monthly(user):
+    """Return (active credits queryset, monthly_credits Decimal) for a user.
+
+    Le crédit est la source unique de sa mensualité : tout crédit actif est
+    compté une fois. Les RecurringTransaction liées à un crédit ne sont jamais
+    comptées (filtrées en amont), ce qui élimine tout double comptage.
+    """
     from django.db.models import Sum
     from apps.credits.models import Credit, CreditDraw
-    from apps.recurring.models import RecurringTransaction
 
-    covered_ids = list(
-        RecurringTransaction.objects.filter(
-            user=user, is_active=True, credit__isnull=False,
-            transaction_type='expense', frequency__in=('monthly', 'weekly'),
-        ).values_list('credit_id', flat=True).distinct()
-    )
-    uncovered = Credit.objects.filter(user=user, is_active=True).exclude(id__in=covered_ids)
-    credit_agg = uncovered.exclude(credit_type='revolving').aggregate(
+    credits = Credit.objects.filter(user=user, is_active=True)
+    credit_agg = credits.exclude(credit_type='revolving').aggregate(
         p=Sum('monthly_payment'), ins=Sum('insurance_monthly')
     )
     monthly_credits = (credit_agg['p'] or Decimal('0')) + (credit_agg['ins'] or Decimal('0'))
     revolving_draws = CreditDraw.objects.filter(
-        credit__in=uncovered.filter(credit_type='revolving'), is_active=True,
+        credit__in=credits.filter(credit_type='revolving'), is_active=True,
     ).aggregate(t=Sum('monthly_payment'))['t']
     monthly_credits += (revolving_draws or Decimal('0'))
-    return uncovered, monthly_credits
+    return credits, monthly_credits
 
 
 def _build_daily_recurring_events(recurring_qs, linked_this_cycle, paid_this_cycle,
@@ -204,10 +202,15 @@ def build_engine_from_user(user, overrides: dict = None, cycle_start_day: int = 
     from apps.accounts.services import get_account_balance
     from apps.recurring.models import RecurringTransaction
 
-    accounts = Account.objects.filter(user=user, is_active=True).exclude(account_type='credit')
+    accounts = (
+        Account.objects.filter(user=user, is_active=True)
+        .exclude(account_type='credit')
+        .exclude(exclude_from_total=True)
+    )
     total_balance = sum(get_account_balance(a) for a in accounts) or Decimal('0')
 
-    # Monthly and weekly recurring: convert to per-month average.
+    # Monthly and weekly recurring: convert to per-month average. Les récurrences
+    # liées à un crédit sont exclues (le crédit est la source unique).
     freq_multipliers = {
         'monthly': Decimal('1'),
         'weekly': Decimal('52') / Decimal('12'),
@@ -217,7 +220,8 @@ def build_engine_from_user(user, overrides: dict = None, cycle_start_day: int = 
         total = Decimal('0')
         for freq, multiplier in freq_multipliers.items():
             agg = RecurringTransaction.objects.filter(
-                user=user, is_active=True, transaction_type=transaction_type, frequency=freq,
+                user=user, is_active=True, transaction_type=transaction_type,
+                frequency=freq, credit__isnull=True,
             ).aggregate(t=Sum('amount'))['t']
             if agg:
                 total += agg * multiplier
@@ -231,7 +235,9 @@ def build_engine_from_user(user, overrides: dict = None, cycle_start_day: int = 
     today = date.today()
     end_date = today + relativedelta(months=_MAX_HORIZON_MONTHS)
     yearly_events = []
-    for rt in RecurringTransaction.objects.filter(user=user, is_active=True, frequency='yearly'):
+    for rt in RecurringTransaction.objects.filter(
+        user=user, is_active=True, frequency='yearly', credit__isnull=True
+    ):
         occ = rt.next_occurrence
         while occ <= end_date:
             yearly_events.append({
@@ -242,9 +248,9 @@ def build_engine_from_user(user, overrides: dict = None, cycle_start_day: int = 
             })
             occ = occ + relativedelta(years=1)
 
-    # Only count credits that have NO linked active recurring transaction that
-    # already contributes to monthly_expenses (expense, monthly or weekly).
-    uncovered, monthly_credits = _compute_uncovered_credits(user)
+    # Le crédit est la source unique de sa mensualité : on compte tous les
+    # crédits actifs (les récurrences liées sont déjà exclues ci-dessus).
+    credits_qs, monthly_credits = _compute_credits_monthly(user)
 
     # Événements jour-le-jour (récurrences + échéances de crédit) placés sur leur
     # date réelle. Couvre le plus long horizon jour-le-jour (6 mois) avec une marge.
@@ -261,22 +267,24 @@ def build_engine_from_user(user, overrides: dict = None, cycle_start_day: int = 
     _paid_this_cycle = {(r['amount'], r['transaction_type'], r['account_id']) for r in _month_rows if not r['recurring_transaction_id']}
 
     daily_events = _build_daily_recurring_events(
-        RecurringTransaction.objects.filter(user=user, is_active=True),
+        RecurringTransaction.objects.filter(user=user, is_active=True, credit__isnull=True),
         _linked_this_cycle, _paid_this_cycle, first_of_month, today, daily_end,
     )
 
-    for credit in uncovered.exclude(credit_type='revolving'):
+    for credit in credits_qs.exclude(credit_type='revolving'):
         amount = (credit.monthly_payment or Decimal('0')) + (credit.insurance_monthly or Decimal('0'))
         if amount == 0:
             continue
-        for pay_date in _monthly_charge_dates(credit.start_date.day, today, daily_end):
+        charge_day = credit.payment_day or credit.start_date.day
+        for pay_date in _monthly_charge_dates(charge_day, today, daily_end):
             daily_events.append({'date': pay_date, 'amount': amount, 'kind': 'credits', 'label': credit.name})
 
-    for credit in uncovered.filter(credit_type='revolving').prefetch_related('draws'):
+    for credit in credits_qs.filter(credit_type='revolving').prefetch_related('draws'):
         amount = sum(d.monthly_payment for d in credit.draws.all() if d.is_active)
         if not amount:
             continue
-        for pay_date in _monthly_charge_dates(credit.start_date.day, today, daily_end):
+        charge_day = credit.payment_day or credit.start_date.day
+        for pay_date in _monthly_charge_dates(charge_day, today, daily_end):
             daily_events.append({'date': pay_date, 'amount': Decimal(str(amount)), 'kind': 'credits', 'label': credit.name})
 
     return ProjectionEngine(
@@ -315,7 +323,7 @@ def build_engine_for_account(user, account_id: int, overrides: dict = None, cycl
         for freq, multiplier in freq_multipliers.items():
             agg = RecurringTransaction.objects.filter(
                 user=user, is_active=True, transaction_type=transaction_type,
-                frequency=freq, account_id=account_id,
+                frequency=freq, account_id=account_id, credit__isnull=True,
             ).aggregate(t=Sum('amount'))['t']
             if agg:
                 total += agg * multiplier
@@ -329,7 +337,7 @@ def build_engine_for_account(user, account_id: int, overrides: dict = None, cycl
     end_date = today + relativedelta(months=_MAX_HORIZON_MONTHS)
     yearly_events = []
     for rt in RecurringTransaction.objects.filter(
-        user=user, is_active=True, frequency='yearly', account_id=account_id
+        user=user, is_active=True, frequency='yearly', account_id=account_id, credit__isnull=True
     ):
         occ = rt.next_occurrence
         while occ <= end_date:
@@ -339,10 +347,11 @@ def build_engine_for_account(user, account_id: int, overrides: dict = None, cycl
             })
             occ = occ + relativedelta(years=1)
 
-    # Credits: include uncovered credits (assumed paid from checking account)
-    uncovered, monthly_credits = _compute_uncovered_credits(user)
+    # Credits: tous les crédits actifs (le crédit est la source unique de sa
+    # mensualité ; supposés prélevés sur le compte courant projeté).
+    credits_qs, monthly_credits = _compute_credits_monthly(user)
 
-    # Daily events: recurring filtered by account_id + credit charges (uncovered)
+    # Daily events: recurring filtered by account_id + tous les crédits actifs
     # Couvre le plus long horizon jour-le-jour (6 mois) avec une petite marge.
     daily_end = today + relativedelta(months=6) + timedelta(days=5)
 
@@ -357,22 +366,26 @@ def build_engine_for_account(user, account_id: int, overrides: dict = None, cycl
     _paid_this_cycle = {(r['amount'], r['transaction_type'], r['account_id']) for r in _month_rows if not r['recurring_transaction_id']}
 
     daily_events = _build_daily_recurring_events(
-        RecurringTransaction.objects.filter(user=user, is_active=True, account_id=account_id),
+        RecurringTransaction.objects.filter(
+            user=user, is_active=True, account_id=account_id, credit__isnull=True
+        ),
         _linked_this_cycle, _paid_this_cycle, first_of_month, today, daily_end,
     )
 
-    for credit in uncovered.exclude(credit_type='revolving'):
+    for credit in credits_qs.exclude(credit_type='revolving'):
         amount = (credit.monthly_payment or Decimal('0')) + (credit.insurance_monthly or Decimal('0'))
         if amount == 0:
             continue
-        for pay_date in _monthly_charge_dates(credit.start_date.day, today, daily_end):
+        charge_day = credit.payment_day or credit.start_date.day
+        for pay_date in _monthly_charge_dates(charge_day, today, daily_end):
             daily_events.append({'date': pay_date, 'amount': amount, 'kind': 'credits', 'label': credit.name})
 
-    for credit in uncovered.filter(credit_type='revolving').prefetch_related('draws'):
+    for credit in credits_qs.filter(credit_type='revolving').prefetch_related('draws'):
         amount = sum(d.monthly_payment for d in credit.draws.all() if d.is_active)
         if not amount:
             continue
-        for pay_date in _monthly_charge_dates(credit.start_date.day, today, daily_end):
+        charge_day = credit.payment_day or credit.start_date.day
+        for pay_date in _monthly_charge_dates(charge_day, today, daily_end):
             daily_events.append({'date': pay_date, 'amount': Decimal(str(amount)), 'kind': 'credits', 'label': credit.name})
 
     return ProjectionEngine(
