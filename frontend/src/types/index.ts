@@ -225,12 +225,19 @@ export interface SimulationExpenseItem {
   amount: number
 }
 
+export interface SimulationIncomeItem {
+  id: string
+  label: string
+  amount: number
+}
+
 export interface SimulationParams {
   months: number
   income?: number
   expenses?: number
   credits?: number
   extra_expenses?: Pick<SimulationExpenseItem, 'label' | 'amount'>[]
+  extra_income?: Pick<SimulationIncomeItem, 'label' | 'amount'>[]
   daily?: boolean
 }
 

@@ -97,6 +97,17 @@ def simulation_view(request):
         if total_extra > 0:
             overrides['extra_expenses'] = total_extra
 
+    extra_income_list = request.data.get('extra_income', [])
+    if isinstance(extra_income_list, list):
+        total_extra_income = 0.0
+        for item in extra_income_list:
+            try:
+                total_extra_income += float(item.get('amount', 0))
+            except (ValueError, TypeError, AttributeError):
+                pass
+        if total_extra_income > 0:
+            overrides['extra_income'] = total_extra_income
+
     pref = UserPreference.objects.filter(user=request.user).first()
     cycle_start_day = pref.cycle_start_day if pref else 1
 
