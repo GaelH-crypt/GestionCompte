@@ -40,7 +40,11 @@ class ProjectionEngine:
             month_date = today + relativedelta(months=i + 1)
             y, m = month_date.year, month_date.month
 
-            income = self.overrides.get('income', self.monthly_income) + self._yearly_for_month(y, m, 'income')
+            income = (
+                self.overrides.get('income', self.monthly_income)
+                + self._yearly_for_month(y, m, 'income')
+                + Decimal(str(self.overrides.get('extra_income', 0)))
+            )
             expenses = (
                 self.overrides.get('expenses', self.monthly_expenses)
                 + self._yearly_for_month(y, m, 'expense')
@@ -74,7 +78,8 @@ class ProjectionEngine:
         # every month in the window receives the full monthly delta. This matters
         # for multi-month horizons (3/6 mois): dividing by the whole day count would
         # spread one month's delta across the entire window and understate it.
-        income_delta = self.overrides.get('income', self.monthly_income) - self.monthly_income
+        extra_income = self.overrides.get('extra_income', Decimal('0'))
+        income_delta = self.overrides.get('income', self.monthly_income) - self.monthly_income + extra_income
         expenses_delta = self.overrides.get('expenses', self.monthly_expenses) - self.monthly_expenses
         extra = self.overrides.get('extra_expenses', Decimal('0'))
         expenses_extra_delta = expenses_delta + extra
@@ -191,7 +196,7 @@ def _parse_overrides(overrides: dict | None) -> dict:
     return {
         k: Decimal(str(v))
         for k, v in overrides.items()
-        if k in ('income', 'expenses', 'credits', 'extra_expenses') and v is not None
+        if k in ('income', 'expenses', 'credits', 'extra_expenses', 'extra_income') and v is not None
     }
 
 
