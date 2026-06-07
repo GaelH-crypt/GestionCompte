@@ -66,6 +66,14 @@ class RapportViewValidationTest(TestCase):
         resp = self.client.get(BASE_URL, {'date_from': '2024-01-01', 'date_to': 'bad'})
         self.assertEqual(resp.status_code, 400)
 
+    def test_400_if_date_from_after_date_to(self):
+        resp = self.client.get(BASE_URL, {'date_from': '2025-12-31', 'date_to': '2025-01-01'})
+        self.assertEqual(resp.status_code, 400)
+
+    def test_400_if_account_is_not_integer(self):
+        resp = self.client.get(BASE_URL, {'date_from': '2025-01-01', 'date_to': '2025-12-31', 'account': 'abc'})
+        self.assertEqual(resp.status_code, 400)
+
 
 class RapportViewEmptyPeriodTest(TestCase):
     """KPIs are zero when there are no transactions."""
@@ -85,7 +93,7 @@ class RapportViewEmptyPeriodTest(TestCase):
         self.assertEqual(kpis['savings_rate'], 0)
         self.assertEqual(kpis['avg_daily_expense'], '0.00')
         self.assertEqual(kpis['fixed_ratio'], 0)
-        self.assertEqual(kpis['variable_ratio'], 1)
+        self.assertEqual(kpis['variable_ratio'], 0)
 
     def test_by_category_empty_for_empty_period(self):
         resp = self.client.get(BASE_URL, {'date_from': '2024-01-01', 'date_to': '2024-01-31'})

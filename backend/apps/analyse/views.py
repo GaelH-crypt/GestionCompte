@@ -32,6 +32,12 @@ class RapportView(APIView):
                 status=400,
             )
 
+        if date_from > date_to:
+            return Response(
+                {'error': 'date_from must be before or equal to date_to'},
+                status=400,
+            )
+
         # --- Optional parameters ---
         account_id = request.query_params.get('account')
         include_simulated = request.query_params.get('include_simulated', 'false').lower() == 'true'
@@ -55,6 +61,13 @@ class RapportView(APIView):
             date__lte=date_to,
         )
         if account_id:
+            try:
+                account_id = int(account_id)
+            except (ValueError, TypeError):
+                return Response(
+                    {'error': 'account must be a valid integer'},
+                    status=400,
+                )
             qs = qs.filter(account_id=account_id)
 
         # --- KPI aggregations ---
@@ -85,9 +98,10 @@ class RapportView(APIView):
             # Note: fixed_expenses only counts DB transactions, not simulated extra_expenses
             # which are considered variable by default
             fixed_ratio = round(float(fixed_expenses / total_expenses), 4)
+            variable_ratio = round(1 - fixed_ratio, 4)
         else:
             fixed_ratio = 0
-        variable_ratio = round(1 - fixed_ratio, 4)
+            variable_ratio = 0
 
         # --- By category breakdown (expenses only) ---
         expense_qs = qs.filter(transaction_type='expense')
