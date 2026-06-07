@@ -23,6 +23,14 @@ class Credit(models.Model):
     start_date = models.DateField()
     end_date = models.DateField(null=True, blank=True)
     max_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    payment_day = models.PositiveSmallIntegerField(null=True, blank=True)
+    payment_account = models.ForeignKey(
+        'accounts.Account',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='credits_drawn',
+    )
     early_repayment_possible = models.BooleanField(default=True)
     notes = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)

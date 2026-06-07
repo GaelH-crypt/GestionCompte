@@ -41,15 +41,12 @@ export default function SchedulePage() {
   const recurring = recurringData ?? []
   const credits = creditsData ?? []
 
-  // Credits that already have a linked active recurring transaction are
-  // represented via that recurring entry — don't add a duplicate credit entry.
-  const coveredCreditIds = new Set(
-    recurring.filter((r) => r.credit !== null && r.is_active).map((r) => r.credit!)
-  )
-  const uncoveredCredits = credits.filter((c) => !coveredCreditIds.has(c.id))
+  // Le crédit est la source unique de sa mensualité : on affiche tous les
+  // crédits, et on ignore les récurrences liées à un crédit (redondantes).
+  const standaloneRecurring = recurring.filter((r) => r.credit === null)
 
-  const recurringEntries = expandOccurrences(recurring, months)
-  const creditEntries = expandCreditOccurrences(uncoveredCredits, months)
+  const recurringEntries = expandOccurrences(standaloneRecurring, months)
+  const creditEntries = expandCreditOccurrences(credits, months)
 
   const allEntries: AnyEntry[] = [...recurringEntries, ...creditEntries].sort(
     (a, b) => a.date.getTime() - b.date.getTime()

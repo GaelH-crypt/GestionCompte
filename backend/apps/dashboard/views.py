@@ -24,7 +24,11 @@ def dashboard_summary(request):
     cycle_start_day = pref.cycle_start_day if pref else 1
     first_of_month = get_cycle_start(today, cycle_start_day)
 
-    accounts = Account.objects.filter(user=user, is_active=True).exclude(account_type='credit')
+    accounts = (
+        Account.objects.filter(user=user, is_active=True)
+        .exclude(account_type='credit')
+        .exclude(exclude_from_total=True)
+    )
     total_balance = sum(get_account_balance(a) for a in accounts)
     accounts_data = [
         {'id': a.id, 'name': a.name, 'type': a.account_type,
@@ -50,7 +54,11 @@ def dashboard_summary(request):
         ).aggregate(t=Sum('monthly_payment'))['t'] or 0
     )
 
-    recurring = RecurringTransaction.objects.filter(user=user, is_active=True, transaction_type='expense')
+    # Les récurrences liées à un crédit ne sont pas comptées : le crédit est la
+    # source unique de la mensualité (cf. total_monthly_credits ci-dessus).
+    recurring = RecurringTransaction.objects.filter(
+        user=user, is_active=True, transaction_type='expense', credit__isnull=True,
+    )
     total_recurring = float(recurring.aggregate(t=Sum('amount'))['t'] or 0)
 
     cat_map = {c.id: c for c in Category.objects.filter(user=user).select_related('parent')}

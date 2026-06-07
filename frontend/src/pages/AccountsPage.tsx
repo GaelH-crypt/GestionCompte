@@ -53,6 +53,11 @@ function AccountCard({ account, showCreditBadge, onIgnore, onEdit, onDelete }: A
                   Compte crédit
                 </span>
               )}
+              {account.exclude_from_total && (
+                <span className="text-xs text-purple-400 bg-purple-400/10 px-1.5 py-0.5 rounded">
+                  Hors total
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -122,7 +127,9 @@ export default function AccountsPage() {
   const accounts = data ?? []
   const mainAccounts = accounts.filter((a) => a.account_type !== 'credit')
   const creditAccounts = accounts.filter((a) => a.account_type === 'credit')
-  const totalBalance = mainAccounts.reduce((s, a) => s + a.current_balance, 0)
+  const totalBalance = mainAccounts
+    .filter((a) => !a.exclude_from_total)
+    .reduce((s, a) => s + a.current_balance, 0)
 
   return (
     <div className="space-y-6">
@@ -192,6 +199,9 @@ export default function AccountsPage() {
           onSaved={() => {
             setShowForm(false)
             qc.invalidateQueries({ queryKey: ['accounts'] })
+            qc.invalidateQueries({ queryKey: ['credits'] })
+            qc.invalidateQueries({ queryKey: ['dashboard-summary'] })
+            qc.invalidateQueries({ queryKey: ['projections'] })
           }}
         />
       )}
@@ -212,8 +222,20 @@ function AccountFormModal({ account, credits, onClose, onSaved }: AccountFormMod
   const [balance, setBalance] = useState(account?.initial_balance ?? '0')
   const [color, setColor] = useState(account?.color ?? '#6366f1')
   const [linkedCredit, setLinkedCredit] = useState<number | null>(account?.linked_credit ?? null)
+  const [excludeFromTotal, setExcludeFromTotal] = useState(account?.exclude_from_total ?? false)
+  const linkedCreditObj = credits.find((c) => c.id === linkedCredit) ?? null
+  const [monthlyPayment, setMonthlyPayment] = useState(linkedCreditObj?.monthly_payment ?? '')
+  const [insuranceMonthly, setInsuranceMonthly] = useState(linkedCreditObj?.insurance_monthly ?? '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  // Pré-remplir les champs du crédit quand on change le crédit lié.
+  function handleLinkedCreditChange(id: number | null) {
+    setLinkedCredit(id)
+    const c = credits.find((x) => x.id === id) ?? null
+    setMonthlyPayment(c?.monthly_payment ?? '')
+    setInsuranceMonthly(c?.insurance_monthly ?? '')
+  }
 
   const sel =
     'bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 w-full focus:outline-none focus:ring-2 focus:ring-brand-500'
@@ -223,9 +245,20 @@ function AccountFormModal({ account, credits, onClose, onSaved }: AccountFormMod
     setLoading(true)
     setError('')
     try {
-      const payload = { name, account_type: type, initial_balance: balance, color, icon: 'CreditCard', linked_credit: linkedCredit }
+      const payload = {
+        name, account_type: type, initial_balance: balance, color,
+        icon: 'CreditCard', linked_credit: linkedCredit,
+        exclude_from_total: excludeFromTotal,
+      }
       if (account) await accountsApi.update(account.id, payload)
       else await accountsApi.create(payload)
+      // Édition inline du crédit lié : pilote la mensualité depuis la modal du compte.
+      if (type === 'credit' && linkedCredit) {
+        await creditsApi.update(linkedCredit, {
+          monthly_payment: monthlyPayment === '' ? null : monthlyPayment,
+          insurance_monthly: insuranceMonthly === '' ? '0' : insuranceMonthly,
+        })
+      }
       onSaved()
     } catch {
       setError('Une erreur est survenue.')
@@ -250,7 +283,7 @@ function AccountFormModal({ account, credits, onClose, onSaved }: AccountFormMod
           />
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium text-gray-400">Type</label>
-            <select value={type} onChange={(e) => { setType(e.target.value as AccountType); if (e.target.value !== 'credit') setLinkedCredit(null) }} className={sel}>
+            <select value={type} onChange={(e) => { setType(e.target.value as AccountType); if (e.target.value !== 'credit') handleLinkedCreditChange(null) }} className={sel}>
               <option value="checking">Courant</option>
               <option value="savings">Épargne</option>
               <option value="cash">Espèces</option>
@@ -264,13 +297,35 @@ function AccountFormModal({ account, credits, onClose, onSaved }: AccountFormMod
               <select
                 className={sel}
                 value={linkedCredit ?? ''}
-                onChange={(e) => setLinkedCredit(e.target.value ? Number(e.target.value) : null)}
+                onChange={(e) => handleLinkedCreditChange(e.target.value ? Number(e.target.value) : null)}
               >
                 <option value="">— Aucun —</option>
                 {credits.map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
+            </div>
+          )}
+          {type === 'credit' && linkedCredit && (
+            <div className="grid grid-cols-2 gap-3 rounded-lg border border-gray-800 bg-gray-800/30 p-3">
+              <Input
+                label="Mensualité (€)"
+                type="number"
+                step="0.01"
+                min="0"
+                value={monthlyPayment ?? ''}
+                onChange={(e) => setMonthlyPayment(e.target.value)}
+                placeholder="0.00"
+              />
+              <Input
+                label="Assurance mens. (€)"
+                type="number"
+                step="0.01"
+                min="0"
+                value={insuranceMonthly ?? ''}
+                onChange={(e) => setInsuranceMonthly(e.target.value)}
+                placeholder="0.00"
+              />
             </div>
           )}
           <Input
@@ -290,6 +345,17 @@ function AccountFormModal({ account, credits, onClose, onSaved }: AccountFormMod
               className="h-10 w-full rounded-lg border border-gray-700 bg-gray-800 cursor-pointer p-1"
             />
           </div>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={excludeFromTotal}
+              onChange={(e) => setExcludeFromTotal(e.target.checked)}
+              className="rounded border-gray-700 bg-gray-800 text-brand-500"
+            />
+            <span className="text-sm text-gray-400">
+              Ne pas compter dans le total (ex : compte d'un enfant)
+            </span>
+          </label>
           {error && <p className="text-sm text-red-400">{error}</p>}
           <div className="flex gap-3 pt-2">
             <Button type="button" variant="secondary" className="flex-1" onClick={onClose}>

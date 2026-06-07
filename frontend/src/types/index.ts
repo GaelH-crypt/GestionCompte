@@ -22,6 +22,7 @@ export interface Account {
   icon: string
   is_active: boolean
   is_import_ignored: boolean
+  exclude_from_total: boolean
   linked_credit: number | null
   created_at: string
 }
@@ -133,6 +134,8 @@ export interface Credit {
   start_date: string
   end_date: string | null
   max_amount: string | null
+  payment_day: number | null
+  payment_account: number | null
   early_repayment_possible: boolean
   notes: string
   is_active: boolean
