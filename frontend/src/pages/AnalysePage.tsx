@@ -1,15 +1,18 @@
 import { useState, useMemo } from 'react'
 import { useQuery, useQueries } from '@tanstack/react-query'
-import { BarChart2, Play, Plus, X } from 'lucide-react'
+import { BarChart2, Play, Plus, X, TrendingUp, ChevronDown } from 'lucide-react'
+import { clsx } from 'clsx'
 import { transactionsApi } from '@/api/transactions'
 import { accountsApi } from '@/api/accounts'
 import { categoriesApi } from '@/api/categories'
+import { analyseApi } from '@/api/analyse'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { PageSpinner } from '@/components/ui/Spinner'
 import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import type { AnalyseParams, Transaction } from '@/types'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from 'recharts'
+import type { AnalyseParams, Transaction, RapportResponse } from '@/types'
 import { renderCategoryOptions } from '@/utils/categoryOptions'
 
 type FilterRow = AnalyseParams & { id: string }
@@ -63,6 +66,7 @@ const inp = 'bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm tex
 export default function AnalysePage() {
   const [rows, setRows] = useState<FilterRow[]>([defaultRow()])
   const [activeRows, setActiveRows] = useState<FilterRow[] | null>(null)
+  const [bilanOpen, setBilanOpen] = useState(true)
 
   const { data: accountsData } = useQuery({
     queryKey: ['accounts'],
@@ -74,6 +78,20 @@ export default function AnalysePage() {
   })
   const accounts = accountsData ?? []
   const categories = categoriesData ?? []
+
+  const bilanRow = rows[0]
+  const { data: rapportData, isLoading: rapportLoading } = useQuery<RapportResponse>({
+    queryKey: ['rapport-bilan', bilanRow.date_from, bilanRow.date_to, bilanRow.account],
+    queryFn: () => {
+      const params: import('@/types').RapportParams = {
+        date_from: bilanRow.date_from,
+        date_to: bilanRow.date_to,
+        ...(bilanRow.account ? { account: bilanRow.account } : {}),
+      }
+      return analyseApi.rapport(params).then((r) => r.data)
+    },
+    enabled: bilanOpen && !!bilanRow.date_from && !!bilanRow.date_to,
+  })
 
   const queryResults = useQueries({
     queries: (activeRows ?? []).map((p) => ({
@@ -153,6 +171,69 @@ export default function AnalysePage() {
       <div className="flex items-center gap-3">
         <BarChart2 className="h-6 w-6 text-brand-400" />
         <h1 className="text-xl font-bold text-white">Analyse</h1>
+      </div>
+
+      {/* Bilan rapide */}
+      <div className="border border-gray-800 rounded-xl overflow-hidden">
+        {/* Header row — click to toggle */}
+        <button
+          onClick={() => setBilanOpen(o => !o)}
+          className="w-full flex items-center justify-between px-5 py-3 bg-gray-900 hover:bg-gray-800/50 transition-colors"
+        >
+          <span className="text-sm font-semibold text-gray-200 flex items-center gap-2">
+            <TrendingUp className="h-4 w-4 text-brand-400" />
+            Bilan rapide
+          </span>
+          <ChevronDown className={clsx('h-4 w-4 text-gray-400 transition-transform', bilanOpen && 'rotate-180')} />
+        </button>
+
+        {bilanOpen && (
+          <div className="p-5 bg-gray-900/50 space-y-4">
+            {rapportLoading && (
+              <div className="text-center py-4 text-gray-400 text-sm">Chargement...</div>
+            )}
+            {!rapportLoading && rapportData && (
+              <>
+                {/* KPI cards */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="bg-gray-800 rounded-lg p-3">
+                    <p className="text-xs text-gray-400">Revenus</p>
+                    <p className="text-lg font-bold text-green-400">{formatEur(rapportData.kpis.total_income)}</p>
+                  </div>
+                  <div className="bg-gray-800 rounded-lg p-3">
+                    <p className="text-xs text-gray-400">Dépenses</p>
+                    <p className="text-lg font-bold text-red-400">{formatEur(rapportData.kpis.total_expenses)}</p>
+                  </div>
+                  <div className="bg-gray-800 rounded-lg p-3">
+                    <p className="text-xs text-gray-400">Solde net</p>
+                    <p className={clsx('text-lg font-bold', parseFloat(rapportData.kpis.net) >= 0 ? 'text-blue-400' : 'text-red-400')}>
+                      {formatEur(rapportData.kpis.net)}
+                    </p>
+                  </div>
+                  <div className="bg-gray-800 rounded-lg p-3">
+                    <p className="text-xs text-gray-400">Taux d'épargne</p>
+                    <p className="text-lg font-bold text-brand-400">
+                      {(rapportData.kpis.savings_rate * 100).toFixed(1)}%
+                    </p>
+                  </div>
+                </div>
+
+                {/* Trend chart */}
+                {rapportData.monthly_trend && rapportData.monthly_trend.length > 0 && (
+                  <ResponsiveContainer width="100%" height={200}>
+                    <LineChart data={rapportData.monthly_trend.slice(-12)}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                      <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#9ca3af' }} />
+                      <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={(v) => formatEur(v)} width={80} />
+                      <Line type="monotone" dataKey="income" stroke="#4ade80" strokeWidth={2} dot={false} />
+                      <Line type="monotone" dataKey="expenses" stroke="#f87171" strokeWidth={2} dot={false} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                )}
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Filtres */}
