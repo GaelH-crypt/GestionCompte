@@ -382,3 +382,57 @@ export interface AnalyseParams {
   category?: string
   transaction_type?: string
 }
+
+// ─── Rapport ───────────────────────────────────────────────────────────────
+
+export interface RapportParams {
+  date_from: string
+  date_to: string
+  compare_with?: 'auto' | 'custom'
+  compare_from?: string
+  compare_to?: string
+  account?: string
+  include_simulated?: 'true' | 'false'
+  extra_expenses?: string
+  extra_income?: string
+}
+
+export interface RapportKPIs {
+  total_income: string
+  total_expenses: string
+  net: string
+  savings_rate: number
+  avg_daily_expense: string
+  fixed_ratio: number
+  variable_ratio: number
+}
+
+export interface RapportCategoryStat {
+  category: string
+  color: string
+  total: string
+  count: number
+  percentage: number
+  vs_previous: number | null
+}
+
+export interface RapportMonthlyTrend {
+  month: string
+  income: string
+  expenses: string
+  net: string
+}
+
+export interface RapportComparison {
+  period: { from: string; to: string; days: number }
+  kpis: RapportKPIs
+  by_category: RapportCategoryStat[]
+}
+
+export interface RapportResponse {
+  period: { from: string; to: string; days: number }
+  kpis: RapportKPIs
+  by_category: RapportCategoryStat[]
+  monthly_trend: RapportMonthlyTrend[]
+  comparison: RapportComparison | null
+}
