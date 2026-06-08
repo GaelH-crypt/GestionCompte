@@ -100,10 +100,10 @@ class RapportViewEmptyPeriodTest(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data['by_category'], [])
 
-    def test_monthly_trend_is_empty_list(self):
+    def test_monthly_trend_has_12_months(self):
         resp = self.client.get(BASE_URL, {'date_from': '2024-01-01', 'date_to': '2024-01-31'})
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.data['monthly_trend'], [])
+        self.assertEqual(len(resp.data['monthly_trend']), 12)
 
     def test_comparison_is_null(self):
         resp = self.client.get(BASE_URL, {'date_from': '2024-01-01', 'date_to': '2024-01-31'})
@@ -472,3 +472,113 @@ class RapportViewSimulatedTest(TestCase):
         kpis = resp.data['kpis']
         self.assertEqual(kpis['total_income'], '1000.00')
         self.assertEqual(kpis['total_expenses'], '400.00')
+
+
+class RapportComparisonTest(TestCase):
+    """monthly_trend and comparison features."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user('analyseuser_comp', password='p')
+        self.client.force_authenticate(user=self.user)
+        self.account = Account.objects.create(
+            user=self.user, name='CC', account_type='checking', initial_balance=0,
+        )
+        self.cat = Category.objects.create(
+            user=self.user, name='Alimentation', color='#FF6384',
+        )
+
+    def test_monthly_trend_returns_12_months(self):
+        resp = self.client.get(BASE_URL, {'date_from': '2026-01-01', 'date_to': '2026-01-31'})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(len(resp.data['monthly_trend']), 12)
+
+    def test_monthly_trend_correct_values(self):
+        # Create a transaction in February 2025
+        Transaction.objects.create(
+            user=self.user, account=self.account,
+            transaction_type='income', amount='1400.00',
+            date=_date(2025, 2, 15), description='Salaire',
+        )
+        Transaction.objects.create(
+            user=self.user, account=self.account,
+            transaction_type='expense', amount='1100.00',
+            date=_date(2025, 2, 20), description='Dépenses',
+        )
+        # Request with date_to in a later month that includes Feb 2025 in the 12-month window
+        resp = self.client.get(BASE_URL, {'date_from': '2026-01-01', 'date_to': '2026-01-31'})
+        self.assertEqual(resp.status_code, 200)
+        trend = resp.data['monthly_trend']
+        # Find Feb 2025 in the trend
+        feb_2025 = next((m for m in trend if m['month'] == '2025-02'), None)
+        self.assertIsNotNone(feb_2025)
+        self.assertEqual(feb_2025['income'], '1400.00')
+        self.assertEqual(feb_2025['expenses'], '1100.00')
+        self.assertEqual(feb_2025['net'], '300.00')
+
+    def test_comparison_auto_period(self):
+        # Main period: January 2026 (31 days)
+        # Auto comparison: ends 2025-12-31, starts 2025-12-01 (31 days back)
+        resp = self.client.get(BASE_URL, {
+            'date_from': '2026-01-01',
+            'date_to': '2026-01-31',
+            'compare_with': 'auto',
+        })
+        self.assertEqual(resp.status_code, 200)
+        comp = resp.data['comparison']
+        self.assertIsNotNone(comp)
+        self.assertEqual(comp['period']['from'], '2025-12-01')
+        self.assertEqual(comp['period']['to'], '2025-12-31')
+        self.assertEqual(comp['period']['days'], 31)
+
+    def test_comparison_custom(self):
+        resp = self.client.get(BASE_URL, {
+            'date_from': '2026-01-01',
+            'date_to': '2026-01-31',
+            'compare_with': 'custom',
+            'compare_from': '2025-10-01',
+            'compare_to': '2025-10-31',
+        })
+        self.assertEqual(resp.status_code, 200)
+        comp = resp.data['comparison']
+        self.assertIsNotNone(comp)
+        self.assertEqual(comp['period']['from'], '2025-10-01')
+        self.assertEqual(comp['period']['to'], '2025-10-31')
+        self.assertEqual(comp['period']['days'], 31)
+
+    def test_comparison_vs_previous(self):
+        # Main period: Jan 2026, expense 200 in Alimentation
+        Transaction.objects.create(
+            user=self.user, account=self.account,
+            transaction_type='expense', amount='200.00',
+            date=_date(2026, 1, 10), description='Supermarché',
+            category=self.cat,
+        )
+        # Comparison period: Dec 2025, expense 100 in Alimentation
+        Transaction.objects.create(
+            user=self.user, account=self.account,
+            transaction_type='expense', amount='100.00',
+            date=_date(2025, 12, 10), description='Supermarché déc',
+            category=self.cat,
+        )
+        resp = self.client.get(BASE_URL, {
+            'date_from': '2026-01-01',
+            'date_to': '2026-01-31',
+            'compare_with': 'auto',
+        })
+        self.assertEqual(resp.status_code, 200)
+        by_cat = resp.data['by_category']
+        alimentation = next((r for r in by_cat if r['category'] == 'Alimentation'), None)
+        self.assertIsNotNone(alimentation)
+        # vs_previous = (200 - 100) / 100 * 100 = 100.0
+        self.assertAlmostEqual(alimentation['vs_previous'], 100.0, places=1)
+
+    def test_comparison_custom_missing_dates_400(self):
+        resp = self.client.get(BASE_URL, {
+            'date_from': '2026-01-01',
+            'date_to': '2026-01-31',
+            'compare_with': 'custom',
+            # compare_from is intentionally missing
+            'compare_to': '2025-12-31',
+        })
+        self.assertEqual(resp.status_code, 400)
