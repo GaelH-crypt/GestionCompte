@@ -177,12 +177,13 @@ export default function RapportPage() {
     }
   }
 
+  const extraExpenses = getExtraExpenses()
   const params: RapportParams = {
     date_from: dateFrom,
     date_to: dateTo,
     ...(accountFilter ? { account: accountFilter } : {}),
     ...(includeSimulated ? { include_simulated: 'true' } : {}),
-    ...(getExtraExpenses() ? { extra_expenses: getExtraExpenses() } : {}),
+    ...(extraExpenses ? { extra_expenses: extraExpenses } : {}),
     ...(compareMode === 'auto' ? { compare_with: 'auto' } : {}),
     ...(compareMode === 'custom' && compareFrom && compareTo
       ? { compare_with: 'custom', compare_from: compareFrom, compare_to: compareTo }

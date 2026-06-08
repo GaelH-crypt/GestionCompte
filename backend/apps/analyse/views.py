@@ -250,8 +250,8 @@ class RapportView(APIView):
             comp_income_agg = comp_base_qs.filter(transaction_type='income').aggregate(total=Sum('amount'))
             comp_expense_agg = comp_base_qs.filter(transaction_type='expense').aggregate(total=Sum('amount'))
 
-            comp_total_income = (comp_income_agg['total'] or Decimal('0.00')) + extra_income
-            comp_total_expenses = (comp_expense_agg['total'] or Decimal('0.00')) + extra_expenses
+            comp_total_income = comp_income_agg['total'] or Decimal('0.00')
+            comp_total_expenses = comp_expense_agg['total'] or Decimal('0.00')
             comp_net = comp_total_income - comp_total_expenses
 
             if comp_total_income > 0:
@@ -396,9 +396,11 @@ class RapportView(APIView):
             trend_last = date(last_month_year, last_month_month + 1, 1) - timedelta(days=1)
 
         # Single aggregated query: income and expenses per calendar month
+        trend_qs = Transaction.objects.filter(user=request.user, date__gte=trend_first, date__lte=trend_last)
+        if account_id:
+            trend_qs = trend_qs.filter(account_id=account_id)
         trend_raw = (
-            Transaction.objects
-            .filter(user=request.user, date__gte=trend_first, date__lte=trend_last)
+            trend_qs
             .annotate(month_trunc=TruncMonth('date'))
             .values('month_trunc')
             .annotate(

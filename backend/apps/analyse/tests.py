@@ -582,3 +582,30 @@ class RapportComparisonTest(TestCase):
             'compare_to': '2025-12-31',
         })
         self.assertEqual(resp.status_code, 400)
+
+    def test_monthly_trend_respects_account_filter(self):
+        account1 = Account.objects.create(user=self.user, name='A1', account_type='checking', initial_balance=0)
+        account2 = Account.objects.create(user=self.user, name='A2', account_type='checking', initial_balance=0)
+        # Transaction on account1 in current month
+        Transaction.objects.create(
+            user=self.user, account=account1, transaction_type='expense', amount=100,
+            description='A1 expense', date=datetime.date.today().replace(day=1),
+        )
+        # Transaction on account2 in current month
+        Transaction.objects.create(
+            user=self.user, account=account2, transaction_type='expense', amount=500,
+            description='A2 expense', date=datetime.date.today().replace(day=1),
+        )
+
+        resp = self.client.get(BASE_URL, {
+            'date_from': datetime.date.today().replace(day=1).isoformat(),
+            'date_to': datetime.date.today().isoformat(),
+            'account': account1.id,
+        })
+        self.assertEqual(resp.status_code, 200)
+        # The current month in monthly_trend should only reflect account1's expense (100), not account2's (500)
+        today = datetime.date.today()
+        current_month = today.strftime('%Y-%m')
+        trend_month = next((m for m in resp.data['monthly_trend'] if m['month'] == current_month), None)
+        self.assertIsNotNone(trend_month)
+        self.assertEqual(float(trend_month['expenses']), 100.0)
