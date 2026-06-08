@@ -1,7 +1,8 @@
 from decimal import Decimal, InvalidOperation
 from datetime import date, timedelta
 
-from django.db.models import Sum, Count, Q
+from django.db.models import Sum, Count, Q, Case, When, DecimalField as ModelDecimalField
+from django.db.models.functions import TruncMonth
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -381,36 +382,65 @@ class RapportView(APIView):
             y -= 1
         start_year, start_month = y, m
 
-        trend_qs_base = Transaction.objects.filter(user=request.user)
+        # Compute date bounds for the 12-month window
+        trend_first = date(start_year, start_month, 1)
+        # Last day of the 12th month (= last day of date_to's month)
+        last_month_year = start_year
+        last_month_month = start_month + 11
+        while last_month_month > 12:
+            last_month_month -= 12
+            last_month_year += 1
+        if last_month_month == 12:
+            trend_last = date(last_month_year + 1, 1, 1) - timedelta(days=1)
+        else:
+            trend_last = date(last_month_year, last_month_month + 1, 1) - timedelta(days=1)
 
+        # Single aggregated query: income and expenses per calendar month
+        trend_raw = (
+            Transaction.objects
+            .filter(user=request.user, date__gte=trend_first, date__lte=trend_last)
+            .annotate(month_trunc=TruncMonth('date'))
+            .values('month_trunc')
+            .annotate(
+                income=Sum(
+                    Case(
+                        When(transaction_type='income', then='amount'),
+                        default=Decimal('0'),
+                        output_field=ModelDecimalField(),
+                    )
+                ),
+                expenses=Sum(
+                    Case(
+                        When(transaction_type='expense', then='amount'),
+                        default=Decimal('0'),
+                        output_field=ModelDecimalField(),
+                    )
+                ),
+            )
+            .order_by('month_trunc')
+        )
+        # Build a lookup dict keyed by 'YYYY-MM'
+        trend_map = {
+            row['month_trunc'].strftime('%Y-%m'): {
+                'income': row['income'] or Decimal('0'),
+                'expenses': row['expenses'] or Decimal('0'),
+            }
+            for row in trend_raw
+        }
+        # Fill all 12 months, using zeros for months with no transactions
         for i in range(12):
-            month_year = start_year
-            month_month = start_month + i
-            while month_month > 12:
-                month_month -= 12
-                month_year += 1
-
-            month_first = date(month_year, month_month, 1)
-            # Last day of the month
-            if month_month == 12:
-                month_last = date(month_year + 1, 1, 1) - timedelta(days=1)
-            else:
-                month_last = date(month_year, month_month + 1, 1) - timedelta(days=1)
-
-            month_qs = trend_qs_base.filter(date__gte=month_first, date__lte=month_last)
-
-            m_income_agg = month_qs.filter(transaction_type='income').aggregate(total=Sum('amount'))
-            m_expense_agg = month_qs.filter(transaction_type='expense').aggregate(total=Sum('amount'))
-
-            m_income = m_income_agg['total'] or Decimal('0.00')
-            m_expenses = m_expense_agg['total'] or Decimal('0.00')
-            m_net = m_income - m_expenses
-
+            abs_month = start_year * 12 + start_month - 1 + i
+            y, mo = divmod(abs_month, 12)
+            mo += 1  # divmod gives 0-based month
+            month_key = f'{y:04d}-{mo:02d}'
+            data = trend_map.get(month_key, {'income': Decimal('0'), 'expenses': Decimal('0')})
+            inc = data['income']
+            exp = data['expenses']
             monthly_trend.append({
-                'month': f'{month_year:04d}-{month_month:02d}',
-                'income': f'{m_income:.2f}',
-                'expenses': f'{m_expenses:.2f}',
-                'net': f'{m_net:.2f}',
+                'month': month_key,
+                'income': f'{inc:.2f}',
+                'expenses': f'{exp:.2f}',
+                'net': f'{inc - exp:.2f}',
             })
 
         # --- Build response ---
