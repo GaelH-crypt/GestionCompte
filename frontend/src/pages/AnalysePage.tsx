@@ -74,8 +74,8 @@ export default function AnalysePage() {
     queryKey: ['rapport-bilan', bilanRow.date_from, bilanRow.date_to, bilanRow.account],
     queryFn: () => {
       const params: import('@/types').RapportParams = {
-        date_from: bilanRow.date_from,
-        date_to: bilanRow.date_to,
+        date_from: bilanRow.date_from!,
+        date_to: bilanRow.date_to!,
         ...(bilanRow.account ? { account: bilanRow.account } : {}),
       }
       return analyseApi.rapport(params).then((r) => r.data)
