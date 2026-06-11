@@ -272,6 +272,7 @@ class CreditSignalTest(TestCase):
         self.assertTrue(RecurringTransaction.objects.filter(credit_id=credit_id).exists())
         self.client.delete(f'/api/credits/{credit_id}/')
         self.assertFalse(RecurringTransaction.objects.filter(credit_id=credit_id).exists())
+        self.assertEqual(RecurringTransaction.objects.count(), 0)  # pas d'orphelin
 
     def test_no_recurring_for_revolving_via_api(self):
         resp = self._create_credit(
