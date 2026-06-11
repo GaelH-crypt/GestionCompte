@@ -1,3 +1,4 @@
+import calendar
 from decimal import Decimal
 from datetime import date
 from dateutil.relativedelta import relativedelta
@@ -73,7 +74,6 @@ def generate_schedule(credit, max_months: int = 12) -> list:
 
 def _next_occurrence(start_date, payment_day):
     """Renvoie la prochaine date de prélèvement >= aujourd'hui."""
-    import calendar
     today = date.today()
     if payment_day is None:
         d = start_date
@@ -116,11 +116,12 @@ def sync_recurring_transaction(credit):
             existing.delete()
         return
 
-    amount = Decimal(str(credit.monthly_payment)) + Decimal(str(credit.insurance_monthly or 0))
+    amount = credit.monthly_payment + (credit.insurance_monthly or Decimal('0'))
     next_occ = _next_occurrence(credit.start_date, credit.payment_day)
     category = _find_category(credit.user, credit.credit_type)
 
     if existing:
+        existing.is_active = True
         existing.name = credit.name
         existing.amount = amount
         existing.next_occurrence = next_occ

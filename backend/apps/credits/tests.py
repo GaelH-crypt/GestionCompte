@@ -1,9 +1,13 @@
 import datetime
+from decimal import Decimal
 from django.contrib.auth.models import User
 from django.test import TestCase
 from rest_framework.test import APIClient
 from rest_framework import status
+from apps.accounts.models import Account
 from apps.credits.models import Credit, CreditDraw
+from apps.credits.services import sync_recurring_transaction
+from apps.recurring.models import RecurringTransaction
 
 
 class CreditAPITest(TestCase):
@@ -133,12 +137,6 @@ class RevolvingCreditTest(TestCase):
         self.assertAlmostEqual(float(resp.data['total_monthly_charge']), 87.50)
 
 
-from apps.credits.services import sync_recurring_transaction
-from apps.accounts.models import Account
-from apps.recurring.models import RecurringTransaction
-from decimal import Decimal
-
-
 class SyncRecurringTest(TestCase):
     def setUp(self):
         self.user = User.objects.create_user('syncuser', password='p')
@@ -214,3 +212,23 @@ class SyncRecurringTest(TestCase):
         credit.save()
         sync_recurring_transaction(credit)
         self.assertFalse(RecurringTransaction.objects.filter(credit=credit).exists())
+
+    def test_reactivates_deactivated_recurring(self):
+        """Un flux désactivé (migration 0003) doit être réactivé lors du sync."""
+        credit = self._make_credit()
+        # Simuler un flux existant mais désactivé (comme après migration 0003)
+        RecurringTransaction.objects.create(
+            user=self.user,
+            name='Old flux',
+            amount=100,
+            transaction_type='expense',
+            frequency='monthly',
+            next_occurrence=datetime.date.today(),
+            account=self.account,
+            credit=credit,
+            is_active=False,
+        )
+        sync_recurring_transaction(credit)
+        rts = RecurringTransaction.objects.filter(credit=credit)
+        self.assertEqual(rts.count(), 1)
+        self.assertTrue(rts.first().is_active)
