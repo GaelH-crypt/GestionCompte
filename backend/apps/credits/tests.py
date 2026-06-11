@@ -216,19 +216,69 @@ class SyncRecurringTest(TestCase):
     def test_reactivates_deactivated_recurring(self):
         """Un flux désactivé (migration 0003) doit être réactivé lors du sync."""
         credit = self._make_credit()
-        # Simuler un flux existant mais désactivé (comme après migration 0003)
-        RecurringTransaction.objects.create(
-            user=self.user,
-            name='Old flux',
-            amount=100,
-            transaction_type='expense',
-            frequency='monthly',
-            next_occurrence=datetime.date.today(),
-            account=self.account,
-            credit=credit,
-            is_active=False,
-        )
+        # Le signal a déjà créé un flux actif ; on simule une désactivation (migration 0003)
+        RecurringTransaction.objects.filter(credit=credit).update(is_active=False)
         sync_recurring_transaction(credit)
         rts = RecurringTransaction.objects.filter(credit=credit)
         self.assertEqual(rts.count(), 1)
         self.assertTrue(rts.first().is_active)
+
+
+class CreditSignalTest(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user('siguser', password='p')
+        self.client.force_authenticate(user=self.user)
+        self.account = Account.objects.create(
+            user=self.user, name='CA', account_type='checking', initial_balance=0
+        )
+
+    def _create_credit(self, **extra):
+        payload = {
+            'name': 'Crédit maison',
+            'credit_type': 'mortgage',
+            'initial_capital': '200000.00',
+            'remaining_capital': '180000.00',
+            'interest_rate': '2.50',
+            'monthly_payment': '900.00',
+            'insurance_monthly': '50.00',
+            'duration_months': 240,
+            'start_date': '2026-01-01',
+            'payment_day': 5,
+            'payment_account': self.account.id,
+        }
+        payload.update(extra)
+        return self.client.post('/api/credits/', payload)
+
+    def test_signal_creates_recurring_on_credit_creation(self):
+        resp = self._create_credit()
+        self.assertEqual(resp.status_code, 201)
+        credit_id = resp.data['id']
+        rt = RecurringTransaction.objects.get(credit_id=credit_id)
+        self.assertEqual(rt.amount, Decimal('950.00'))  # 900 + 50
+        self.assertEqual(rt.frequency, 'monthly')
+        self.assertEqual(rt.transaction_type, 'expense')
+
+    def test_signal_updates_recurring_on_credit_update(self):
+        resp = self._create_credit()
+        credit_id = resp.data['id']
+        self.client.patch(f'/api/credits/{credit_id}/', {'monthly_payment': '950.00'})
+        rt = RecurringTransaction.objects.get(credit_id=credit_id)
+        self.assertEqual(rt.amount, Decimal('1000.00'))  # 950 + 50
+
+    def test_signal_deletes_recurring_on_credit_delete(self):
+        resp = self._create_credit()
+        credit_id = resp.data['id']
+        self.assertTrue(RecurringTransaction.objects.filter(credit_id=credit_id).exists())
+        self.client.delete(f'/api/credits/{credit_id}/')
+        self.assertFalse(RecurringTransaction.objects.filter(credit_id=credit_id).exists())
+
+    def test_no_recurring_for_revolving_via_api(self):
+        resp = self._create_credit(
+            credit_type='revolving',
+            max_amount='5000.00',
+            monthly_payment='',
+        )
+        self.assertEqual(resp.status_code, 201)
+        credit_id = resp.data['id']
+        self.assertFalse(RecurringTransaction.objects.filter(credit_id=credit_id).exists())
