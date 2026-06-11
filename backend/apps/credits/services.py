@@ -69,3 +69,73 @@ def generate_schedule(credit, max_months: int = 12) -> list:
             'remaining_capital': round(float(capital), 2),
         })
     return schedule
+
+
+def _next_occurrence(start_date, payment_day):
+    """Renvoie la prochaine date de prélèvement >= aujourd'hui."""
+    import calendar
+    today = date.today()
+    if payment_day is None:
+        d = start_date
+        while d < today:
+            d += relativedelta(months=1)
+        return d
+
+    candidate = today.replace(day=1)
+    for _ in range(24):
+        last_day = calendar.monthrange(candidate.year, candidate.month)[1]
+        day = min(payment_day, last_day)
+        candidate = candidate.replace(day=day)
+        if candidate >= today:
+            return candidate
+        candidate = (candidate.replace(day=1) + relativedelta(months=1))
+    return today
+
+
+def _find_category(user, credit_type):
+    from apps.categories.models import Category
+    if credit_type == 'mortgage':
+        return Category.objects.filter(user=user, name='Crédit immobilier').first()
+    return None
+
+
+def sync_recurring_transaction(credit):
+    """Crée, met à jour ou supprime le flux récurrent associé au crédit."""
+    from apps.recurring.models import RecurringTransaction
+
+    eligible = (
+        credit.credit_type != 'revolving'
+        and credit.monthly_payment is not None
+        and credit.payment_account is not None
+    )
+
+    existing = RecurringTransaction.objects.filter(credit=credit).first()
+
+    if not eligible:
+        if existing:
+            existing.delete()
+        return
+
+    amount = Decimal(str(credit.monthly_payment)) + Decimal(str(credit.insurance_monthly or 0))
+    next_occ = _next_occurrence(credit.start_date, credit.payment_day)
+    category = _find_category(credit.user, credit.credit_type)
+
+    if existing:
+        existing.name = credit.name
+        existing.amount = amount
+        existing.next_occurrence = next_occ
+        existing.account = credit.payment_account
+        existing.category = category
+        existing.save()
+    else:
+        RecurringTransaction.objects.create(
+            user=credit.user,
+            name=credit.name,
+            amount=amount,
+            transaction_type='expense',
+            frequency='monthly',
+            next_occurrence=next_occ,
+            account=credit.payment_account,
+            category=category,
+            credit=credit,
+        )
